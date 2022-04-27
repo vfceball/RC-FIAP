@@ -8,4 +8,4 @@ Installation instructions
  4. Clone or download the [RC-FIAP repository](https://github.com/vfceball/RC-FIAP)  
  5. Using your preferred IDE(PyCharm, Spyder) open the RC_FIAP_main.py file
 
-contact vceballos@uninorte.edu.co for further assistance
+Contact vceballos@uninorte.edu.co for further assistance, or if you need to perform IDA or Conditional Scenario Spectra (CSS) type of analyses.
