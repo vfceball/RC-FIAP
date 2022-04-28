@@ -1,0 +1,7 @@
+op.constraints('Transformation')
+op.numberer('RCM')
+op.system('BandGeneral')
+op.test('EnergyIncr', 1.e-8,  10)
+op.algorithm('KrylovNewton')
+op.integrator('Newmark',  0.5,  0.25)
+op.analysis('Transient')
