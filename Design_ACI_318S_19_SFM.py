@@ -84,7 +84,7 @@ def AsBeam(Mu, EleTag, cover, ro_min_b, ro_max_b, dst, fy, BBeam, HBeam):
     return As_con, d, Mn, db, Mpr, nb
 
 # Shear beams design
-def AvBeam(Vu, db, d, EleTag, fy, dst, Ast, BBeam, nb, Vc):
+def AvBeam(Vu, db, d, EleTag, fys, dst, Ast, BBeam, nb, Vc):
     Vs = (Vu - 0.75 * Vc) / 0.75
     if Vs > 4. * Vc:
         print("reshape by shear in Beam " + str(EleTag))
@@ -96,7 +96,7 @@ def AvBeam(Vu, db, d, EleTag, fy, dst, Ast, BBeam, nb, Vc):
     else:
         for nra in nr_v:
             Ave = Ast * nra  # area transversal del estribo
-            se_2 = Ave * fy * d / Vs
+            se_2 = Ave * fys * d / Vs
             se = min(se_1, se_2)
             if se >= 60. * mm:
                 break
@@ -195,7 +195,7 @@ def AsColumn(b, h, EleTag, cover, dst, fy, Beta1C, Pu_v, Mu_v, Sum_Mn_B, FactorC
     return nbH, nbB, db, As, fiPn, fiMn, Mn_i, Mpr_i, d, dist, ro, Mu_i, Col_to_beam_str_ratio
 
 # Shear columns design
-def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Vc, db, fy, Nu_min):
+def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Vc, db, fys, Nu_min):
     fiv = 0.75
     Ag = b * h
     dp = cover + dst + db / 2
@@ -208,16 +208,16 @@ def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Vc, db, fy, Nu_min):
     so = max(100*mm, min(100*mm+(350*mm-hx)/3, 150*mm))
     se_1 = min(6. * db, b / 4., h / 4., so)  # minimum spacing c.18.7.5.3 ACI-19
     if Nu_min <= 0.3*b*h*fcC:
-        se_2 = max(Ash_H / h / (0.3 * (b * h / Ash_H - 1) * fcC / fy),
-                   Ash_B / b / (0.3 * (b * h / Ash_B - 1) * fcC / fy), Ash_H / h / (0.09 * fcC / fy),
-                   Ash_B / b / (0.09 * fcC / fy))
+        se_2 = max(Ash_H / h / (0.3 * (b * h / Ash_H - 1) * fcC / fys),
+                   Ash_B / b / (0.3 * (b * h / Ash_B - 1) * fcC / fys), Ash_H / h / (0.09 * fcC / fys),
+                   Ash_B / b / (0.09 * fcC / fys))
     elif Nu_min > 0.3*b*h*fcC:
         kf = max(fcC/(175*MPa)+0.6, 1.0)
         nl = neH*2+(neB-2)*2
         kn = nl/(nl-2)
-        se_2 = max(Ash_H / h / (0.3 * (b * h / Ash_H - 1) * fcC / fy),
-                   Ash_B / b / (0.3 * (b * h / Ash_B - 1) * fcC / fy), Ash_H / h / (0.09 * fcC / fy),
-                   Ash_B / b / (0.09 * fcC / fy), 0.2*kf*kn*Nu_min)
+        se_2 = max(Ash_H / h / (0.3 * (b * h / Ash_H - 1) * fcC / fys),
+                   Ash_B / b / (0.3 * (b * h / Ash_B - 1) * fcC / fys), Ash_H / h / (0.09 * fcC / fys),
+                   Ash_B / b / (0.09 * fcC / fys), 0.2*kf*kn*Nu_min)
     se_1 = min(se_1, se_2)
 
     Vs = (Vu - fiv * Vc) / fiv
@@ -232,11 +232,11 @@ def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Vc, db, fy, Nu_min):
     if Vs <= 0.:
         se = se_1
     else:
-        se_2 = Ave * fy * d / Vs
+        se_2 = Ave * fys * d / Vs
         se = min([se_1, se_2])
     if se < 60. * mm:
         print('Minimum spacing of stirrups is not met in column ' + str(EleTag))
-    Vn = Vc + Ave*fy*d/se
+    Vn = Vc + Ave*fys*d/se
     return se, neB, neH, Vn
 
 # Compression block parameters beta as function f'c
@@ -261,6 +261,8 @@ span_v = self.ui.span_v.text()
 span_v = span_v.split(',')
 span_v = np.array(span_v, dtype=float)
 fy = float(self.ui.fy.text()) * MPa
+# fys = float(self.ui.fys.text()) * MPa
+fys = fy
 fcB = float(self.ui.fcB.text()) * MPa
 fcC = float(self.ui.fcC.text()) * MPa
 R = float(self.ui.R.text())
@@ -592,8 +594,8 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         else:
             Vc2 = 0.17 * sqrt(fcB / 1000.) * MPa * BBeam * d
 
-        nst1, sst1 = AvBeam(VU1, db_t1, dt1, Ele.EleTag, fy, dst, Ast, BBeam, nb1, Vc1)
-        nst2, sst2 = AvBeam(VU2, db_t2, dt2, Ele.EleTag, fy, dst, Ast, BBeam, nb2, Vc2)
+        nst1, sst1 = AvBeam(VU1, db_t1, dt1, Ele.EleTag, fys, dst, Ast, BBeam, nb1, Vc1)
+        nst2, sst2 = AvBeam(VU2, db_t2, dt2, Ele.EleTag, fys, dst, Ast, BBeam, nb2, Vc2)
 
         DataBeamDesing.append(BeamDesing(Ele.EleTag, BBeam, HBeam, Ast1, dt1, Mn_N1, Asb1, db1, Mn_P1, nst1,
                                          sst1, Ast2, dt2, Mn_N2, Asb2, db2, Mn_P2, nst2, sst2, Ele.Nod_ini,
@@ -619,7 +621,6 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
     if ListNodes[Ele.Nod_ini, 1] == ListNodes[Ele.Nod_end, 1]:
         if ListNodes[Ele.Nod_end, 2] == Loc_heigth[-1]:
             ncolsn = 1
-
         else:
             ncolsn = 2
         Mn_N_R, Mn_P_R, Mn_N_L, Mn_P_L = 0, 0, 0, 0
@@ -686,7 +687,7 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
             dp = cover + dst + db / 2
             d = h - dp
             Vc = (0.17 * sqrt(fcC * MPa) + Nu_min / 6 / b / h) * b * d
-        sst, nsB, nsH, Vn = AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Vc, db, fy, Nu_min)
+        sst, nsB, nsH, Vn = AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Vc, db, fys, Nu_min)
         NUG1 = abs(PID + 0.25 * PIL)
         NUG2 = abs(PED + 0.25 * PEL)
         NUD1 = abs(PID + 0.25 * PIL + PIE)

@@ -1,5 +1,5 @@
-def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, LC, DataColPhl, DataColDesing,
-                ListNodesLC):
+def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, EleBeam, LC, DataColPhl, DataColDesing,
+                ListNodesLC, EQname, HL_directory):
     # --------------------------------------------------
     # Description of Parameters
     # --------------------------------------------------
@@ -13,7 +13,7 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, LC
     import openseespy.opensees as op
     import numpy as np  # load the numpy module, calling it np
     print("Starting runNRHA")
-    op.wipeAnalysis()
+
     op.constraints('Transformation')
     op.numberer('RCM')
     op.system('BandGeneral')
@@ -48,6 +48,13 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, LC
     maxRA_v = []
     maxVu_Vn_v = []
 
+    # if self.ui.checkBoxSaveCSS.isChecked() == True:
+    #     data_dir = EQname.replace('gmotions', 'Data')
+    #     ForceSec01_Beams, DefoSec01_Beams, ForceSec06_Beams, DefoSec06_Beams = np.zeros(2 * nele), np.zeros(2 * nele), \
+    #                                                                            np.zeros(2 * nele), np.zeros(2 * nele)
+    #     ForceSec01_Cols, DefoSec01_Cols, ForceSec06_Cols, DefoSec06_Cols = np.zeros(2 * nele), np.zeros(2 * nele), \
+    #                                                                        np.zeros(2 * nele), np.zeros(2 * nele)
+
     # Run the actual analysis now
     while cIndex == 0 and controlTime <= Tmax and ok == 0:
         # Runs while the building is stable, time is less
@@ -55,6 +62,7 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, LC
         # and the analysis is still converging
 
         # Do the analysis
+        vForceSec01_Beams, vDefoSec01_Beams, vForceSec06_Beams, vDefoSec06_Beams = [], [], [], []
         ok = op.analyze(1, Dt)
         controlTime = op.getTime()  # Update the control time
 
@@ -176,6 +184,7 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, LC
         for (Ele, DCPhl, DC) in zip(EleCol, DataColPhl, DataColDesing):
             DeforsS1 = np.array(op.eleResponse(Ele.EleTag, 'section', 1, 'deformation'))
             DeforsS6 = np.array(op.eleResponse(Ele.EleTag, 'section', 6, 'deformation'))
+
             fi_S1, fi_S6 = DeforsS1[1], DeforsS6[1]
             RA = DCPhl.phl1 * max(map(abs, [fi_S1, fi_S6]))
             if RA >= maxRA:
@@ -196,6 +205,20 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, LC
         #     ElemsDeforS6 = np.append(ElemsDeforS6, DeforsS6)
         # MP_ElemsDeforS1 = np.vstack((MP_ElemsDeforS1, ElemsDeforS1))
         # MP_ElemsDeforS6 = np.vstack((MP_ElemsDeforS6, ElemsDeforS6))
+
+        # for Element in Elements:
+        #     ForcesS1 = np.array(op.eleResponse(Element.EleTag, 'section', 1, 'force'))
+        #     ForcesS6 = np.array(op.eleResponse(Element.EleTag, 'section', 6, 'force'))
+        #     DeforsS1 = np.array(op.eleResponse(Element.EleTag, 'section', 1, 'deformation'))
+        #     DeforsS6 = np.array(op.eleResponse(Element.EleTag, 'section', 6, 'deformation'))
+        #     ElemsForceS1 = np.append(ElemsForceS1, ForcesS1)
+        #     ElemsDeforS1 = np.append(ElemsDeforS1, DeforsS1)
+        #     ElemsForceS6 = np.append(ElemsForceS6, ForcesS6)
+        #     ElemsDeforS6 = np.append(ElemsDeforS6, DeforsS6)
+        # ForceSec01_Beams = np.vstack((ForceSec01_Beams, ElemsForceS1))
+        # DefoSec01_Beams = np.vstack((DefoSec01_Beams, ElemsDeforS1))
+        # ForceSec06_Beams = np.vstack((ForceSec06_Beams, ElemsForceS6))
+        # DefoSec06_Beams = np.vstack((DefoSec06_Beams, ElemsDeforS6))
 
     # DriftTecho_v = np.array(DriftTecho_v)
     maxDriftTecho = np.abs(DriftTecho_v).max()

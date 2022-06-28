@@ -124,7 +124,7 @@ ax4 = fig4.add_subplot(111)
 
 # ind = np.where(Sa_max <= 5)[0]
 # IM = IM[ind]
-hist_tot, bin_edges_tot = np.histogram(IM, bins=np.geomspace(0.0001, 5, 50))
+hist_tot, bin_edges_tot = np.histogram(IM, bins=np.geomspace(0.0001, 5, 25))
 # print('hist_tot=', hist_tot)
 # print('bin_edges_tot=', bin_edges_tot)
 # print('hist_tot=', len(hist_tot))
@@ -152,7 +152,7 @@ elif FragCurve == 'Max Vu/Vn':
 for jj in range(nSDR):
     ind = np.where(FRAG_max >= CSS_SDRCurves[jj])[0]
     # IM_bin = np.sort(IM[ind])
-    hist, bin_edges = np.histogram(IM[ind], bins=np.geomspace(0.0001, 5, 50))
+    hist, bin_edges = np.histogram(IM[ind], bins=np.geomspace(0.0001, 5, 25))
     hist = hist[ind_t]
     bin_avg = (bin_edges[0:-1] + bin_edges[1:]) / 2
     bin_avg = bin_avg[ind_t]

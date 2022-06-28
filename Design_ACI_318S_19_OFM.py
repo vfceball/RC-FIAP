@@ -84,7 +84,7 @@ def AsBeam(Mu, EleTag, cover, ro_min_b, ro_max_b, dst, fy, BBeam, HBeam):
     return As_con, d, Mn, db, Mpr
 
 # Shear beams design
-def AvBeam(Vu, db, d, EleTag, fy, dst, Ast, BBeam):
+def AvBeam(Vu, db, d, EleTag, fys, dst, Ast, BBeam):
     Vc = 0.17 * sqrt(fcB / 1000.) * MPa * BBeam * d
     Vs = (Vu - 0.75 * Vc) / 0.75
     if Vs > 4. * Vc:
@@ -100,7 +100,7 @@ def AvBeam(Vu, db, d, EleTag, fy, dst, Ast, BBeam):
     else:
         for nra in nr_v:
             Ave = Ast * nra  # area transversal del estribo
-            se_2 = Ave * fy * d / Vs
+            se_2 = Ave * fys * d / Vs
             se = min(se_1, se_2)
             if se >= 60. * mm:
                 break
@@ -186,7 +186,7 @@ def AsColumn(b, h, EleTag, cover, dst, fy, Beta1C, Pu_v, Mu_v, Sum_Mn_B, FactorC
     return nbH, nbB, db, As, fiPn, fiMn, Mn_i, d, dist, ro, Mu_i, Col_to_beam_str_ratio
 
 # Shear columns design
-def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fy):
+def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys):
     fiv = 0.75
     Ag = b * h
     dp = cover + dst + db / 2
@@ -209,11 +209,11 @@ def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fy):
     if Vs <= 0.:
         se = se_1
     else:
-        se_2 = Ave * fy * d / Vs
+        se_2 = Ave * fys * d / Vs
         se = min([se_1, se_2])
     if se < 60. * mm:
         print('Minimum spacing of stirrups is not met in column ' + str(EleTag))
-    Vn = Vc + Ave*fy*d/se
+    Vn = Vc + Ave*fys*d/se
     return se, neB, neH, Vn
 
 # Compression block parameters beta as function f'c
@@ -238,6 +238,8 @@ span_v = self.ui.span_v.text()
 span_v = span_v.split(',')
 span_v = np.array(span_v, dtype=float)
 fy = float(self.ui.fy.text()) * MPa
+# fys = float(self.ui.fys.text()) * MPa
+fys = fy
 fcB = float(self.ui.fcB.text()) * MPa
 fcC = float(self.ui.fcC.text()) * MPa
 R = float(self.ui.R.text())
@@ -559,8 +561,8 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         Vpr_2 = (Mpr_N1 + Mpr_P2) / Ele.LEle + (1.2 * WDL + WLL) * Ele.LEle / 2.
         Vpr = max(Vpr_1, Vpr_2)
 
-        nst1, sst1 = AvBeam(VU1, db_t1, dt1, Ele.EleTag, fy, dst, Ast, BBeam)
-        nst2, sst2 = AvBeam(VU2, db_t2, dt2, Ele.EleTag, fy, dst, Ast, BBeam)
+        nst1, sst1 = AvBeam(VU1, db_t1, dt1, Ele.EleTag, fys, dst, Ast, BBeam)
+        nst2, sst2 = AvBeam(VU2, db_t2, dt2, Ele.EleTag, fys, dst, Ast, BBeam)
 
         DataBeamDesing.append(BeamDesing(Ele.EleTag, BBeam, HBeam, Ast1, dt1, Mn_N1, Asb1, db1, Mn_P1, nst1,
                                          sst1, Ast2, dt2, Mn_N2, Asb2, db2, Mn_P2, nst2, sst2, Ele.Nod_ini,
@@ -655,7 +657,7 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         # Vu = max([VUa, min([VUb, VUc])])  # Cortante maximo de diseño
         Vu = VUa
 
-        sst, nsB, nsH, Vn = AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fy)
+        sst, nsB, nsH, Vn = AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys)
         NUG1 = abs(PID + 0.25 * PIL)
         NUG2 = abs(PED + 0.25 * PEL)
         NUD1 = abs(PID + 0.25 * PIL + PIE)
