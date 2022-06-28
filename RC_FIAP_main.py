@@ -24,7 +24,7 @@ from PyQt5.QtGui import QDoubleValidator, QIntValidator
 from PyQt5.QtCore import Qt
 
 from PyQt5.QtWidgets import QDialog, QApplication
-from GUIFrameNonLinearACI1m import *
+from GUIFrameNonLinearACI1m1 import *
 import numpy as np  # load the numpy module, calling it np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -384,7 +384,7 @@ class MyForm(QDialog):
     # Creation of the nonlinear model
     def CreateNLM(self):
         global T1m, T2m, EleCol, EleBeam, MG_ElemsForceS1, MG_ElemsDeforS1, MG_ElemsForceS6, MG_ElemsDeforS6, \
-            DataBeamPhl, DataColPhl, ListNodesLC, DataColPhl, x
+            DataBeamPhl, DataColPhl, ListNodesLC, DataColPhl, list_beams, list_cols, ListNodes
 
         # Validation of beam and column design table data
         def validate_data(self):
@@ -2022,7 +2022,8 @@ class MyForm(QDialog):
 
     def IDA(self):
         global Loc_span, Loc_heigth, ListNodes, Elements, DataBeamDesing, DataColDesing, Wtotal, num_elems, \
-            ListNodesDrift, cIndex, ListNodesBasal, T1m, Wtotal, IMv, Sa_maxv, RDR_maxv, SDR_maxv, nrecs, dCap
+            ListNodesDrift, cIndex, ListNodesBasal, T1m, Wtotal, IMv, Sa_maxv, RDR_maxv, SDR_maxv, nrecs, dCap,\
+            list_beams, list_cols
         exec(open("IDA.py").read())
 
         OutputIDAFile = self.ui.OutputIDAFile.text()
@@ -2061,10 +2062,11 @@ class MyForm(QDialog):
     def CSS(self):
         global Loc_span, Loc_heigth, ListNodes, Elements, DataBeamDesing, DataColDesing, Wtotal, num_elems, \
             ListNodesDrift, cIndex, ListNodesBasal, T1m, Wtotal, IM, Sa_max, RDR_max, SDR_max, nrecs, RA_max, EleCol, \
-            EleBeam, DataColPhl, VnVu_max
+            EleBeam, DataColPhl, VnVu_max, list_beams, list_cols
         if not os.path.exists("CSS"):
             os.mkdir("CSS")
         exec(open("CSS.py").read())
+        op.wipeAnalysis()
         OutputCSSFile = self.ui.OutputCSSFile.text()
         np.savetxt('CSS/' + OutputCSSFile + '_IM.txt', IM, fmt='%.6f')
         np.savetxt('CSS/' + OutputCSSFile + '_Sa_max.txt', Sa_max, fmt='%.6f')
