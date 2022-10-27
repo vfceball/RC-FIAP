@@ -1,5 +1,5 @@
-def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, EleBeam, LC, DataColPhl, DataColDesing,
-                ListNodesLC, EQname, HL_directory):
+def runNRHA_CSS(Dt, Tmax, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal, EleCol, EleBeam, LC, DataColPhl,
+                DataColDesing, ListNodesLC, EQname, HL_directory, ListNodes, DataBeamPhl, DataBeamDesing):
     # --------------------------------------------------
     # Description of Parameters
     # --------------------------------------------------
@@ -42,11 +42,22 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, El
     # Set up the storey drift and acceleration values
     maxVu_Vn = 0.0
     htot = Loc_heigth[-1]
+    floors_num = len(Loc_heigth) - 1
+    axes_num = len(Loc_span)
+
     VBasal_v = []
     DriftTecho_v = []
     maxDriftPiso_v = []
     maxRA_v = []
+    maxRPD_v = []
     maxVu_Vn_v = []
+    PhRot_Col_v = np.zeros(floors_num)
+    PhRot_Colm_v = np.zeros((1, floors_num, 2*axes_num))
+    PhRot_Colc_v = np.zeros(floors_num)
+    PhRot_Beam_v = np.zeros(floors_num)
+    PhRot_Beamm_v = np.zeros((1, floors_num, 2*(axes_num-1)))
+    PhRot_Beamc_v = np.zeros(floors_num)
+    maxSDR_v = np.zeros(floors_num)
 
     # if self.ui.checkBoxSaveCSS.isChecked() == True:
     #     data_dir = EQname.replace('gmotions', 'Data')
@@ -154,6 +165,9 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, El
 
         # Calculation of maximum Drift between floors
         maxDriftPiso = 0.0
+        nfloor = 0
+        maxSDR = np.zeros(floors_num)
+        # print('maxSDR', maxSDR)
         for (nod_ini, nod_end) in zip(ListNodesDrift[:-1, 0], ListNodesDrift[1:, 0]):
             # print('nod_ini ', nod_ini, 'nod_end', nod_end)
             nod_ini = int(nod_ini)
@@ -167,7 +181,13 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, El
             drift_piso = desp_piso / hpiso
             if drift_piso >= maxDriftPiso:
                 maxDriftPiso = drift_piso
+            maxSDR[nfloor] = drift_piso
+            nfloor += 1
+            # print('maxSDR', maxSDR)
+            # print('nfloor', nfloor)
         maxDriftPiso_v = np.append(maxDriftPiso_v, maxDriftPiso)
+        maxSDR_v = np.vstack((maxSDR_v, maxSDR))
+
         VBasal = 0.
         op.reactions()
         for node in ListNodesBasal:
@@ -181,14 +201,25 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, El
         DriftTecho_v = np.append(DriftTecho_v, DriftTecho)
 
         maxRA = 0.0  # Max Rotation Angle
+        maxRPD = 0.0
+        PhRot_Col = np.zeros(floors_num)
+        PhRot_Colc = np.zeros(floors_num)
+        PhRot_Colm = np.zeros((floors_num, 2*axes_num))
+        nfloor = 1
+        naxe = 1
         for (Ele, DCPhl, DC) in zip(EleCol, DataColPhl, DataColDesing):
             DeforsS1 = np.array(op.eleResponse(Ele.EleTag, 'section', 1, 'deformation'))
             DeforsS6 = np.array(op.eleResponse(Ele.EleTag, 'section', 6, 'deformation'))
-
             fi_S1, fi_S6 = DeforsS1[1], DeforsS6[1]
             RA = DCPhl.phl1 * max(map(abs, [fi_S1, fi_S6]))
+            PD = op.eleResponse(Ele.EleTag, 'plasticDeformation')
+            PD1 = abs(PD[1])
+            PD2 = abs(PD[2])
+            RPD = max(PD1, PD2)
             if RA >= maxRA:
                 maxRA = RA
+            if RPD >= maxRPD:
+                maxRPD = RPD
             ForcesS1 = np.array(op.eleResponse(Ele.EleTag, 'force'))
             # print('ForcesS1', ForcesS1)
             Vu = abs(ForcesS1[0])
@@ -196,40 +227,98 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, El
             Vu_Vn = Vu/DC.Vn
             if Vu_Vn >= maxVu_Vn:
                 maxVu_Vn = Vu_Vn
+            if ListNodes[Ele.Nod_end, 2] == Loc_heigth[nfloor]:
+                if PD1 > PhRot_Colm[nfloor-1, 2*naxe-2]:
+                    PhRot_Colm[nfloor-1, 2*naxe-2] = PD1
+                if PD2 > PhRot_Colm[nfloor-1, 2*naxe-1]:
+                    PhRot_Colm[nfloor-1, 2*naxe-1] = PD2
+                naxe += 1
+                if RA > PhRot_Col[nfloor-1]:
+                    PhRot_Col[nfloor-1] = RA
+                if RPD > PhRot_Colc[nfloor-1]:
+                    PhRot_Colc[nfloor-1] = RPD
+            else:
+                naxe = 1
+                nfloor += 1
+                if PD1 > PhRot_Colm[nfloor-1, 2*naxe-2]:
+                    PhRot_Colm[nfloor-1, 2*naxe-2] = PD1
+                if PD2 > PhRot_Colm[nfloor-1, 2*naxe-1]:
+                    PhRot_Colm[nfloor-1, 2*naxe-1] = PD2
+                naxe += 1
+                if RA > PhRot_Col[nfloor-1]:
+                    PhRot_Col[nfloor-1] = RA
+                if RPD > PhRot_Colc[nfloor-1]:
+                    PhRot_Colc[nfloor-1] = RPD
         maxRA_v = np.append(maxRA_v, maxRA)
+        maxRPD_v = np.append(maxRPD_v, maxRPD)
         maxVu_Vn_v = np.append(maxVu_Vn_v, maxVu_Vn)
-            # if Element.EleTag <
-            # ElemsDeforS1 = np.append(ElemsDeforS1, DeforsS1)
-
-        #     ElemsDeforS1 = np.append(ElemsDeforS1, DeforsS1)
-        #     ElemsDeforS6 = np.append(ElemsDeforS6, DeforsS6)
-        # MP_ElemsDeforS1 = np.vstack((MP_ElemsDeforS1, ElemsDeforS1))
-        # MP_ElemsDeforS6 = np.vstack((MP_ElemsDeforS6, ElemsDeforS6))
-
-        # for Element in Elements:
-        #     ForcesS1 = np.array(op.eleResponse(Element.EleTag, 'section', 1, 'force'))
-        #     ForcesS6 = np.array(op.eleResponse(Element.EleTag, 'section', 6, 'force'))
-        #     DeforsS1 = np.array(op.eleResponse(Element.EleTag, 'section', 1, 'deformation'))
-        #     DeforsS6 = np.array(op.eleResponse(Element.EleTag, 'section', 6, 'deformation'))
-        #     ElemsForceS1 = np.append(ElemsForceS1, ForcesS1)
-        #     ElemsDeforS1 = np.append(ElemsDeforS1, DeforsS1)
-        #     ElemsForceS6 = np.append(ElemsForceS6, ForcesS6)
-        #     ElemsDeforS6 = np.append(ElemsDeforS6, DeforsS6)
-        # ForceSec01_Beams = np.vstack((ForceSec01_Beams, ElemsForceS1))
-        # DefoSec01_Beams = np.vstack((DefoSec01_Beams, ElemsDeforS1))
-        # ForceSec06_Beams = np.vstack((ForceSec06_Beams, ElemsForceS6))
-        # DefoSec06_Beams = np.vstack((DefoSec06_Beams, ElemsDeforS6))
-
-    # DriftTecho_v = np.array(DriftTecho_v)
+        PhRot_Col_v = np.vstack((PhRot_Col_v, PhRot_Col))
+        PhRot_Colc_v = np.vstack((PhRot_Colc_v, PhRot_Colc))
+        PhRot_Colm_v = np.concatenate((PhRot_Colm_v, [PhRot_Colm]), axis=0)
+        maxRA = 0.0  # Max Rotation Angle
+        PhRot_Beam = np.zeros(floors_num)
+        PhRot_Beamc = np.zeros(floors_num)
+        PhRot_Beamm = np.zeros((floors_num, 2*(axes_num-1)))
+        nfloor = 1
+        naxe = 1
+        for (Ele, DBPhl, DC) in zip(EleBeam, DataBeamPhl, DataBeamDesing):
+            DeforsS1 = np.array(op.eleResponse(Ele.EleTag, 'section', 1, 'deformation'))
+            DeforsS6 = np.array(op.eleResponse(Ele.EleTag, 'section', 6, 'deformation'))
+            fi_S1, fi_S6 = DeforsS1[1], DeforsS6[1]
+            RA1 = DBPhl.phl1 * abs(fi_S1)
+            RA6 = DBPhl.phl2 * abs(fi_S6)
+            RA = max([RA1, RA6])
+            PD = op.eleResponse(Ele.EleTag, 'plasticDeformation')
+            PD1 = abs(PD[1])
+            PD2 = abs(PD[2])
+            RPD = max(PD1, PD2)
+            if ListNodes[Ele.Nod_end, 2] == Loc_heigth[nfloor]:
+                if PD1 > PhRot_Beamm[nfloor-1, 2*naxe-2]:
+                    PhRot_Beamm[nfloor-1, 2*naxe-2] = PD1
+                if PD2 > PhRot_Beamm[nfloor-1, 2*naxe-1]:
+                    PhRot_Beamm[nfloor-1, 2*naxe-1] = PD2
+                naxe += 1
+                if RA > PhRot_Beam[nfloor-1]:
+                    PhRot_Beam[nfloor - 1] = RA
+                if RPD > PhRot_Beamc[nfloor-1]:
+                    PhRot_Beamc[nfloor - 1] = RPD
+            else:
+                naxe = 1
+                nfloor += 1
+                if PD1 > PhRot_Beamm[nfloor-1, 2*naxe-2]:
+                    PhRot_Beamm[nfloor-1, 2*naxe-2] = PD1
+                if PD2 > PhRot_Beamm[nfloor-1, 2*naxe-1]:
+                    PhRot_Beamm[nfloor-1, 2*naxe-1] = PD2
+                naxe += 1
+                if RA > PhRot_Beam[nfloor-1]:
+                    PhRot_Beam[nfloor-1] = RA
+                if RPD > PhRot_Beamc[nfloor-1]:
+                    PhRot_Beamc[nfloor-1] = RPD
+        PhRot_Beam_v = np.vstack((PhRot_Beam_v, PhRot_Beam))
+        PhRot_Beamc_v = np.vstack((PhRot_Beamc_v, PhRot_Beamc))
+        PhRot_Beamm_v = np.concatenate((PhRot_Beamm_v, [PhRot_Beamm]), axis=0)
     maxDriftTecho = np.abs(DriftTecho_v).max()
     maxDriftPisoBdg = np.abs(maxDriftPiso_v).max()
     maxVBasal = np.abs(VBasal_v).max()
     maxRABdg = np.abs(maxRA_v).max()
     maxVuVnBdg = np.abs(maxVu_Vn_v).max()
-
+    maxPhRot_Col = np.max(PhRot_Col_v, axis=0)
+    maxPhRot_Beam = np.max(PhRot_Beam_v, axis=0)
+    maxPhRot_Colc = np.max(PhRot_Colc_v, axis=0)
+    # print('max =', maxPhRot_Colc)
+    maxPhRot_Beamc = np.max(PhRot_Beamc_v, axis=0)
+    maxSDRBdg = np.max(maxSDR_v, axis=0)
+    MaxPhRot_Colm_v = np.max(PhRot_Colm_v, axis=0)
+    MedPhRot_Colm_v = np.median(MaxPhRot_Colm_v, axis=1)
+    # prueba = np.max(MaxPhRot_Colm_v, axis=1)
+    # print('max1 =', prueba)
+    # print('med =', MedPhRot_Colm_v)
+    MaxPhRot_Beamm_v = np.max(PhRot_Beamm_v, axis=0)
+    MedPhRot_Beamm_v = np.median(MaxPhRot_Beamm_v, axis=1)
     md = maxDriftPisoBdg
     print('maxDriftTecho={0:.3f} maxDriftPisoBdg={1:.3f} maxVBasal={2:.3f}'.format(maxDriftTecho, maxDriftPisoBdg,
                                                                                    maxVBasal))
+    # print('maxPhRot_Col', maxPhRot_Col)
 
     # Print to the max interstorey drifts
 
@@ -245,4 +334,5 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, ListNodesDrift, ListNodesBasal, EleCol, El
     Test = np.around(Test, decimals=2)
     # Test = "".join(map(str, Test))
 
-    return cIndex, maxDriftTecho, maxDriftPisoBdg, maxVBasal, maxRABdg, maxVuVnBdg, Test, controlTime, Tmax
+    return cIndex, maxDriftTecho, maxDriftPisoBdg, maxVBasal, maxRABdg, maxVuVnBdg, Test, controlTime, Tmax,\
+           maxPhRot_Col, maxPhRot_Beam, maxSDRBdg, maxPhRot_Colc, maxPhRot_Beamc, MedPhRot_Colm_v, MedPhRot_Beamm_v

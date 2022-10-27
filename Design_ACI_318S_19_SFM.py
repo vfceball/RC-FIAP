@@ -1,5 +1,5 @@
 global Loc_span, Loc_heigth, ListNodes, Elements, DataBeamDesing, DataColDesing, WDL, WLL, WDLS, Wtotal, \
-    cover, num_elems, Beta1B, Beta1C, fcB, fcC, ListNodesDrift, ListNodesBasal, Ta
+    cover, num_elems, Beta1B, Beta1C, fcB, fcC, ListNodesDrift, ListNodesBasal, Ta, num_beams, num_cols
 # Function: Reads Beams design data from table that allows the user to modify the default design from TAB2 of GU
 def data_beams_table(self):
     self.registros_beams = []
@@ -27,12 +27,13 @@ def data_columns_table(self):
         h = DC.h / cm
         roCol = DC.ro
         db = DC.db / mm
+        de = DC.de / mm
         nbH = DC.nbH
         nbB = DC.nbB
         nsH = DC.nsH
         nsB = DC.nsB
         sst = DC.sst / cm
-        registro = RegistroColumns(self.ui.tbl_data_design_columns, DC.EleTag, b, h, roCol, db, nbH, nbB, nsH, nsB,
+        registro = RegistroColumns(self.ui.tbl_data_design_columns, DC.EleTag, b, h, roCol, db, de, nbH, nbB, nsH, nsB,
                                    sst)
         self.registros_cols.append(registro)
 
@@ -89,7 +90,7 @@ def AvBeam(Vu, db, d, EleTag, fys, dst, Ast, BBeam, nb, Vc):
     if Vs > 4. * Vc:
         print("reshape by shear in Beam " + str(EleTag))
     se_1 = min(d / 4., 6. * db, 150. * mm)
-    nr_v = np.array([2, 3, 4])  # vector de numero de ramas
+    nr_v = np.array([2, 3, 4, 5, 6])  # vector de numero de ramas
     if Vs <= 0.:
         se = se_1
         nra = 2.
@@ -195,49 +196,64 @@ def AsColumn(b, h, EleTag, cover, dst, fy, Beta1C, Pu_v, Mu_v, Sum_Mn_B, FactorC
     return nbH, nbB, db, As, fiPn, fiMn, Mn_i, Mpr_i, d, dist, ro, Mu_i, Col_to_beam_str_ratio
 
 # Shear columns design
-def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Vc, db, fys, Nu_min):
+def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Vc, db, fys, Nu_min):
     fiv = 0.75
     Ag = b * h
     dp = cover + dst + db / 2
     d = h - dp
-    neH = floor(nbH / 2) + 1
-    neB = floor(nbB / 2) + 1
-    Ash_H = neH * Ast
-    Ash_B = neB * Ast
-    hx = (h - 2*dp) / neH
-    so = max(100*mm, min(100*mm+(350*mm-hx)/3, 150*mm))
-    se_1 = min(6. * db, b / 4., h / 4., so)  # minimum spacing c.18.7.5.3 ACI-19
-    if Nu_min <= 0.3*b*h*fcC:
-        se_2 = max(Ash_H / h / (0.3 * (b * h / Ash_H - 1) * fcC / fys),
-                   Ash_B / b / (0.3 * (b * h / Ash_B - 1) * fcC / fys), Ash_H / h / (0.09 * fcC / fys),
-                   Ash_B / b / (0.09 * fcC / fys))
-    elif Nu_min > 0.3*b*h*fcC:
-        kf = max(fcC/(175*MPa)+0.6, 1.0)
-        nl = neH*2+(neB-2)*2
-        kn = nl/(nl-2)
-        se_2 = max(Ash_H / h / (0.3 * (b * h / Ash_H - 1) * fcC / fys),
-                   Ash_B / b / (0.3 * (b * h / Ash_B - 1) * fcC / fys), Ash_H / h / (0.09 * fcC / fys),
-                   Ash_B / b / (0.09 * fcC / fys), 0.2*kf*kn*Nu_min)
-    se_1 = min(se_1, se_2)
-
-    Vs = (Vu - fiv * Vc) / fiv
-    if Vs <= 1 / 3 * sqrt(fcC * MPa) * b * d:
-        se_1 = se_1
-    elif Vs >= 1 / 3 * sqrt(fcC * MPa) * b * d:
-        se_1 = min(se_1, h / 4)
-
-    if Vs > 0.66 * sqrt(fcC * MPa) * b * d:
-        print('Resize the column' + str(EleTag) + ' by shear ')
-    Ave = Ash_B  # area transversal del estribo
-    if Vs <= 0.:
-        se = se_1
-    else:
-        se_2 = Ave * fys * d / Vs
-        se = min([se_1, se_2])
-    if se < 60. * mm:
-        print('Minimum spacing of stirrups is not met in column ' + str(EleTag))
+    neH_v = np.arange(floor(nbH / 2) + 1,nbH+1)
+    neB_v = np.arange(floor(nbB / 2) + 1,nbB+1)
+    bc1, bc2 = h - 2*cover, b - 2*cover
+    de_v = np.array([3, 4])
+    for nde in de_v:
+        de = nde / 8. * inch
+        Ast = pi * de ** 2. / 4.
+        for neB in neB_v:
+            for neH in neH_v:
+                Ash_H = neH * Ast
+                Ash_B = neB * Ast
+                hx = (h - 2 * dp) / neH
+                so = max(100 * mm, min(100 * mm + (350 * mm - hx) / 3, 150 * mm))
+                se_1 = min(6. * db, b / 4., h / 4., so)  # minimum spacing c.18.7.5.3 ACI-19
+                if Nu_min <= 0.3*b*h*fcC:
+                    se_2 = min(Ash_H / bc1 / (0.3 * (Ag / (bc1 * bc2) - 1) * fcC / fys),
+                               Ash_B / bc2 / (0.3 * (Ag / (bc1 * bc2) - 1) * fcC / fys),
+                               Ash_H / bc1 / (0.09 * fcC / fys),
+                               Ash_B / bc1 / (0.09 * fcC / fys))
+                elif Nu_min > 0.3*b*h*fcC:
+                    kf = max(fcC/(175*MPa)+0.6, 1.0)
+                    nl = neH*2+(neB-2)*2
+                    kn = nl/(nl-2)
+                    se_2 = min(Ash_H / bc1 / (0.3 * (Ag / (bc1 * bc2) - 1) * fcC / fys),
+                               Ash_B / bc2 / (0.3 * (Ag / (bc1 * bc2) - 1) * fcC / fys),
+                               Ash_H / bc1 / (0.09 * fcC / fys),
+                               Ash_B / bc1 / (0.09 * fcC / fys),
+                               Ash_H/bc1/((0.2*kf*kn*Nu_min)/(fys*bc1*bc2)),
+                               Ash_B/bc2/((0.2*kf*kn*Nu_min)/(fys*bc1*bc2)))
+                se_1 = min(se_1, se_2)
+                Vs = (Vu - fiv * Vc) / fiv
+                if Vs <= 1 / 3 * sqrt(fcC * MPa) * b * d:
+                    se_1 = se_1
+                elif Vs >= 1 / 3 * sqrt(fcC * MPa) * b * d:
+                    se_1 = min(se_1, h / 4)
+                if Vs > 0.66 * sqrt(fcC * MPa) * b * d:
+                    print('Resize the column' + str(EleTag) + ' by shear ')
+                Ave = Ash_B  # area transversal del estribo
+                if Vs <= 0.:
+                    se = se_1
+                else:
+                    se_2 = Ave * fys * d / Vs
+                    se = min([se_1, se_2])
+                if se >= 80.*mm:
+                    break
+                if se < 60. * mm:
+                    print('Minimum spacing of stirrups is not met in column ' + str(EleTag))
+            if se >= 80.*mm:
+                break
+        if se >= 80.*mm:
+            break
     Vn = Vc + Ave*fys*d/se
-    return se, neB, neH, Vn
+    return se, neB, neH, Vn, de
 
 # Compression block parameters beta as function f'c
 
@@ -261,16 +277,9 @@ span_v = self.ui.span_v.text()
 span_v = span_v.split(',')
 span_v = np.array(span_v, dtype=float)
 fy = float(self.ui.fy.text()) * MPa
-# fys = float(self.ui.fys.text()) * MPa
-fys = fy
+fys = float(self.ui.fys.text()) * MPa
 fcB = float(self.ui.fcB.text()) * MPa
 fcC = float(self.ui.fcC.text()) * MPa
-R = float(self.ui.R.text())
-Cd = float(self.ui.Cd.text())
-Omo = float(self.ui.Omo.text())
-Sds = float(self.ui.Sds.text())
-Sd1 = float(self.ui.Sd1.text())
-Tl = float(self.ui.Tl.text())
 WDL = Lafg * DL
 WDLS = Lafs * DL
 WLL = Lafg * LL
@@ -382,6 +391,11 @@ num_beams = num_elems - num_cols
 Pvig = ABeam * GConc
 PColi = AColi * GConc
 PCole = ACole * GConc
+PColSlabD, PColSlabL = 0, 0
+if self.ui.radioButtonSpatial.isChecked() and Lafs > Lafg:
+    PColSlabD = (Lafs-Lafg)*WDL+Pvig*Lafs
+    PColSlabL = (Lafs-Lafg)*WLL
+
 op.timeSeries('Linear', 1)
 op.pattern('Plain', 1, 1)
 for Element in Elements:
@@ -391,6 +405,7 @@ for Element in Elements:
         else:
             PCol = PColi
         op.eleLoad('-ele', Element.EleTag, '-type', '-beamUniform', 0, -PCol)
+        op.eleLoad('-ele', Element.EleTag, '-type', '-beamPoint', 0, 1, -PColSlabD)
     if ListNodes[Element.Nod_ini, 2] == ListNodes[Element.Nod_end, 2]:
         op.eleLoad('-ele', Element.EleTag, '-type', '-beamUniform', -Pvig - WDL)
 
@@ -407,12 +422,14 @@ for Element in Elements:
     Forces.insert(0, Element.EleTag)
     ElemnsForceD.append(Forces)
 ElemnsForceD = np.array(ElemnsForceD)
-Wtotal = np.sum(ElemnsForceD[:len(Loc_span), 2]) * Lafs / Lafg
+Wtotal = np.sum(ElemnsForceD[:len(Loc_span), 2]) * Lafs/Lafg #debo mirar esto
 
 op.loadConst('-time', 0.0)
 op.timeSeries('Linear', 2)
 op.pattern('Plain', 2, 1)
 for Element in Elements:
+    if ListNodes[Element.Nod_ini, 1] == ListNodes[Element.Nod_end, 1]:
+        op.eleLoad('-ele', Element.EleTag, '-type', '-beamPoint', 0, 1, -PColSlabL)
     if ListNodes[Element.Nod_ini, 2] == ListNodes[Element.Nod_end, 2]:
         op.eleLoad('-ele', Element.EleTag, '-type', '-beamUniform', -WLL)
 op.analyze(1)
@@ -427,22 +444,99 @@ ElemnsForceDL = np.array(ElemnsForceDL)
 # Create a Plain load pattern for seismic loading with a Linear TimeSeries (LLEF)
 op.loadConst('-time', 0.0)
 Htotal = Loc_heigth[-1]
-Ct = 0.0466
-x = 0.9
-Ta = Ct * Htotal ** x
-print('Ta =', Ta)
-Ie = 1.0
-Ts = Sd1 / Sds
-if Ta <= Ts:
-    Sa = max(Sds * Ie / R, 0.044 * Sds * Ie, 0.01)
-elif Ta <= Tl:
-    Sa = max(Sd1 * Ie / Ta / R, 0.044 * Sds * Ie, 0.01)
-else:
-    Sa = max(Sd1 * Tl * Ie / (Ta ** 2) / R, 0.044 * Sds * Ie, 0.01)
-if Ta <= 0.5:
+SeismicLoadCode = self.ui.comboBoxSeismicLoadCode.currentText()
+Ie = float(self.ui.Ie.text())
+R = float(self.ui.R.text())
+Cd = float(self.ui.Cd.text())
+Omo = float(self.ui.Omo.text())
+if SeismicLoadCode == 'ASCE 7-16':
+    Sds = float(self.ui.Sds.text())
+    Sd1 = float(self.ui.Sd1.text())
+    Tl = float(self.ui.Tl.text())
+    Ct = 0.0466
+    x = 0.9
+    Ta = Ct * Htotal ** x
+    print('Ta =', Ta)
+    Cu = np.interp(Sd1, [0, 0.1, 0.15, 0.2, 0.3, 5], [1.7, 1.7, 1.6, 1.5, 1.4, 1.4])
+    print('Cu =', Cu)
+    T = Cu * Ta
+    Ts = Sd1 / Sds
+    if T <= Ts:
+        Sa = max(Sds * Ie / R, 0.044 * Sds * Ie, 0.01)
+    elif T <= Tl:
+        Sa = max(Sd1 * Ie / T / R, 0.044 * Sds * Ie, 0.01)
+    else:
+        Sa = max(Sd1 * Tl * Ie / (T ** 2) / R, 0.044 * Sds * Ie, 0.01)
+elif SeismicLoadCode == 'NSR-10':
+    Cd = R
+    Aa = float(self.ui.Aa_10.text())
+    Av = float(self.ui.Av_10.text())
+    Fa = float(self.ui.Fa_10.text())
+    Fv = float(self.ui.Fv_10.text())
+    Sds = 2.5*Aa
+    Ct = 0.047
+    x = 0.9
+    Ta = Ct * Htotal ** x
+    print('Ta =', Ta)
+    Cu = max(1.75-1.2*Av*Fv, 1.2)
+    print('Cu =', Cu)
+    T = Cu * Ta
+    Tc = 0.48*(Av*Fv)/(Aa*Fa)
+    Tl = 2.4*Fv
+    if T <= Tc:
+        Sa = 2.5*Aa*Fa*Ie/R
+    elif T <= Tl:
+        Sa = 1.2*Av*Fv*Ie/T/R
+    else:
+        Sa = 1.2*Av*Fv*Tl*Ie/T**2/R
+elif SeismicLoadCode == 'NSR-98':
+    Cd = R
+    Aa = float(self.ui.Aa_98.text())
+    S = float(self.ui.S_98.text())
+    Sds = 2.5*Aa
+    Ct = 0.08
+    x = 3/4
+    Ta = Ct * Htotal ** x
+    print('Ta =', Ta)
+    Cu = 1.2
+    print('Cu =', Cu)
+    T = Cu * Ta
+    Tc = 0.48*S
+    Tl = 2.4*S
+    if T <= Tc:
+        Sa = 2.5*Aa*Ie/R
+    elif T <= Tl:
+        Sa = 1.2*Aa*S*Ie/T/R
+    else:
+        Sa = Aa*Ie/R
+elif SeismicLoadCode == 'CCCSR-84':
+    Aa = float(self.ui.Aa_84.text())
+    Av = float(self.ui.Av_84.text())
+    S = float(self.ui.S_84.text())
+    Sds = 2.5*Aa
+    Ct = 0.08
+    x = 3/4
+    Ta = Ct * Htotal ** x
+    print('Ta =', Ta)
+    Cu = 1.2
+    print('Cu =', Cu)
+    T = Cu * Ta
+    Tc = 0.48*S
+    Tl = 2.4*S
+    if S >= 1.5 and Aa >= 0.30:
+        Sa = min(2.0*Aa*Ie/R, 1.2*Av*S*Ie/T**(2/3)/R)
+    else:
+        Sa = min(2.5*Aa*Ie/R, 1.2*Av*S*Ie/T**(2/3)/R)
+elif SeismicLoadCode == 'Weight Percentage':
+    Cd = 1
+    Sa = float(self.ui.WP.text())/100
+    Sds = Sa
+    T = 0.5  # an arbitrary period is taken provided that the distribution is essentially triangular k = 1
+    Omo = float(self.ui.Omo.text())
+if T <= 0.5:
     k = 1.
-elif Ta <= 2.5:
-    k = 0.75 + 0.5 * Ta
+elif T <= 2.5:
+    k = 0.75 + 0.5 * T
 else:
     k = 2.
 sumH = np.sum(np.power(Loc_heigth, k))
@@ -511,7 +605,7 @@ Beta1B = beta1(fcB)
 cover = 4 * cm
 dst = 3 / 8 * inch
 Ast = pi * dst ** 2 / 4.  # area de la barra del estribo
-ro_max_b = 0.85 * Beta1B * fcB * 3. / fy / 8.  # maximun steel percentage
+ro_max_b = min(0.85 * Beta1B * fcB * 3. / fy / 8., 0.025)  # maximun steel percentage
 ro_min_b = max(0.25 * sqrt(fcB / MPa) * MPa / fy, 1.4 * MPa / fy)  # minimun steel percentage
 DataBeamDesing = []
 nprog = 0
@@ -537,15 +631,15 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         # print('MID ', MID, 'MED', MED, 'MIL ', MIL, 'MEL', MEL, 'MIE ', MIE, 'MEE', MEE)
         MI1, MI2, MI3, MI4, MI5 = Combo_ACI(MID, MIL, MIE)
         MNU1 = max([MI1, MI2, MI3, MI4, MI5, 0.])  # Negative initial design node moment
-        MPU1 = min([MI1, MI2, MI3, MI4, MI5, abs(MNU1) / 3])  # Positive initial design node momentum
+        MPU1 = min([MI1, MI2, MI3, MI4, MI5, abs(MNU1) / 2])  # Positive initial design node momentum
         ME1, ME2, ME3, ME4, ME5 = Combo_ACI(MED, MEL, MEE)
         MNU2 = max([ME1, ME2, ME3, ME4, ME5, 0.])  # Negative moment final design
-        MPU2 = min([ME1, ME2, ME3, ME4, ME5, abs(MNU2) / 3])  # Positive moment final design
+        MPU2 = min([ME1, ME2, ME3, ME4, ME5, abs(MNU2) / 2])  # Positive moment final design
         Mmax = max([MNU1, -MPU1, MNU2, -MPU2])
-        MNU1 = max([MNU1, Mmax / 5])
-        MPU1 = min([MPU1, -Mmax / 5])
-        MNU2 = max([MNU2, Mmax / 5])
-        MPU2 = min([MPU2, -Mmax / 5])
+        MNU1 = max([MNU1, Mmax / 4])
+        MPU1 = min([MPU1, -Mmax / 4])
+        MNU2 = max([MNU2, Mmax / 4])
+        MPU2 = min([MPU2, -Mmax / 4])
         # print('MNU1 ', MNU1, 'MPU1', MPU1, 'MNU2 ', MNU2, 'MPU2', MPU2)
         Ast1, dt1, Mn_N1, db_t1, Mpr_N1, nbt1 = AsBeam(MNU1, Ele.EleTag, cover, ro_min_b, ro_max_b, dst, fy, BBeam, HBeam)
         Asb1, db1, Mn_P1, db_b1, Mpr_P1, nbb1 = AsBeam(MPU1, Ele.EleTag, cover, ro_min_b, ro_max_b, dst, fy, BBeam, HBeam)
@@ -687,7 +781,7 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
             dp = cover + dst + db / 2
             d = h - dp
             Vc = (0.17 * sqrt(fcC * MPa) + Nu_min / 6 / b / h) * b * d
-        sst, nsB, nsH, Vn = AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Vc, db, fys, Nu_min)
+        sst, nsB, nsH, Vn, de = AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Vc, db, fys, Nu_min)
         NUG1 = abs(PID + 0.25 * PIL)
         NUG2 = abs(PED + 0.25 * PEL)
         NUD1 = abs(PID + 0.25 * PIL + PIE)
@@ -696,7 +790,7 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         MUD2 = abs(MED + 0.25 * MEL + MEE)
         VUD1 = abs(VID + 0.25 * VIL + VIE)
         VUD2 = abs(VED + 0.25 * VEL + VEE)
-        DataColDesing.append(ColDesing(Ele.EleTag, b, h, nbH, nbB, db, As, Pu_v, Mu_v, fiPn, fiMn, Mn_i, d,
+        DataColDesing.append(ColDesing(Ele.EleTag, b, h, nbH, nbB, db, de, As, Pu_v, Mu_v, fiPn, fiMn, Mn_i, d,
                                        dist, ro, Mu_i, sst, nsB, nsH, Ele.Nod_ini, Ele.Nod_end, NUD1, NUD2,
                                        NUG1, NUG2, MUD1, MUD2, VUD1, VUD2, ColBeamStr, Vn))
 

@@ -1,6 +1,7 @@
 global Loc_span, Loc_heigth, ListNodes, Elements, DataBeamDesing, DataColDesing, Wtotal, num_elems, ListNodesDrift, \
     cIndex, ListNodesBasal, T1m, Wtotal, IM, Sa_max, RDR_max, SDR_max, nrecs, RA_max, EleCol, EleBeam, DataColPhl,\
-    VnVu_max, HL_directory, list_beams, list_cols
+    VnVu_max, HL_directory, list_beams, list_cols, maxPhRot_Colv, DataBeamPhl, maxPhRot_Beamv, maxSDRBdg, maxSDRBdgv,\
+    maxPhRot_Colcv, maxPhRot_Beamcv, MedPhRot_Colmv_v, MedPhRot_Beammv_v
 
 from datetime import datetime
 from ReadRecord import ReadRecord
@@ -45,9 +46,19 @@ print('rangDriftNode =', rangDriftNode)
 
 print('^^^^^^^^ STARTING CSS ^^^^^^^^')
 ind = 1
+floors_num = len(Loc_heigth) - 1
 Sa_max, RDR_max, SDR_max, IM, RA_max, VnVu_max = [], [], [], [], [], []
 Full_eqnms_list, Full_sf_list = [], []
 EQnamev, Testv, HL_v, EQname_v, controlTimev, Tmaxv = [], [], [], [], [], []
+maxPhRot_Colv = np.zeros(floors_num)
+maxPhRot_Beamv = np.zeros(floors_num)
+maxPhRot_Colcv = np.zeros(floors_num)
+maxPhRot_Beamcv = np.zeros(floors_num)
+maxSDRBdgv = np.zeros(floors_num)
+
+MedPhRot_Colmv_v = np.zeros(floors_num)
+MedPhRot_Beammv_v = np.zeros(floors_num)
+
 while os.path.exists(HL_directory + '/Hazard_Level_' + str(ind)):
     data_dir = HL_directory + '/Hazard_Level_' + str(ind) + '/Data'
     if not os.path.exists(data_dir):
@@ -96,10 +107,10 @@ for (EQname, sf) in zip(Full_eqnms_list, Full_sf_list):
     slist_beams = np.array(list_beams)
     slist_cols = np.array(list_cols)
     sListNodes = ListNodes[:, 0]
-    print(type(slist_beams))
-    print(type(slist_cols))
-    print(type(sListNodes))
-    print('sListNodes =', sListNodes)
+    # print(type(slist_beams))
+    # print(type(slist_cols))
+    # print(type(sListNodes))
+    # print('sListNodes =', sListNodes)
 
     if self.ui.checkBoxSaveCSS.isChecked() == True:
         data_dir = EQname.replace('gmotions', 'Data')
@@ -116,10 +127,13 @@ for (EQname, sf) in zip(Full_eqnms_list, Full_sf_list):
         op.recorder('Node', '-file', data_dir + '_VertNodes.out', '-closeOnWrite',
                     '-time', '-nodeRange', int(sListNodes[0]), int(sListNodes[-1]), '-dof', 2, 'disp')
 
-    cIndex, mDT, mDPB, maxVB, maxRA, maxVnVu, Test, controlTime, Tmax = runNRHA_CSS(dt, dur, Loc_heigth, ListNodesDrift,
-                                                                                    ListNodesBasal, EleCol, EleBeam, LC,
-                                                                                    DataColPhl, DataColDesing,
-                                                                                    ListNodesLC, EQname, HL_directory)
+    cIndex, mDT, mDPB, maxVB, maxRA, maxVnVu, Test, controlTime, Tmax, maxPhRot_Col, maxPhRot_Beam, maxSDRBdg, \
+    maxPhRot_Colc, maxPhRot_Beamc, MedPhRot_Colm_v, MedPhRot_Beamm_v = runNRHA_CSS(dt, dur, Loc_heigth, Loc_span,
+                                                                                   ListNodesDrift, ListNodesBasal,
+                                                                                   EleCol, EleBeam, LC, DataColPhl,
+                                                                                   DataColDesing, ListNodesLC, EQname,
+                                                                                   HL_directory, ListNodes, DataBeamPhl,
+                                                                                   DataBeamDesing)
 
     if self.ui.checkBoxSaveCSS.isChecked() == True:
         DefoSec_Beams = np.loadtxt(data_dir + '_DefoSec_Beams.out')
@@ -169,7 +183,21 @@ for (EQname, sf) in zip(Full_eqnms_list, Full_sf_list):
     Testv = np.append(Testv, Test)
     controlTimev = np.append(controlTimev, controlTime)
     Tmaxv = np.append(Tmaxv, Tmax)
+    maxPhRot_Colv = np.vstack((maxPhRot_Colv, maxPhRot_Col))
+    maxPhRot_Beamv = np.vstack((maxPhRot_Beamv, maxPhRot_Beam))
+    maxPhRot_Colcv = np.vstack((maxPhRot_Colcv, maxPhRot_Colc))
+    maxPhRot_Beamcv = np.vstack((maxPhRot_Beamcv, maxPhRot_Beamc))
+    MedPhRot_Colmv_v = np.vstack((MedPhRot_Colmv_v, MedPhRot_Colm_v))
+    MedPhRot_Beammv_v = np.vstack((MedPhRot_Beammv_v, MedPhRot_Beamm_v))
+    maxSDRBdgv = np.vstack((maxSDRBdgv, maxSDRBdg))
     op.wipe
+maxPhRot_Colv = np.delete(maxPhRot_Colv, 0, axis=0)
+maxPhRot_Beamv = np.delete(maxPhRot_Beamv, 0, axis=0)
+maxPhRot_Colcv = np.delete(maxPhRot_Colcv, 0, axis=0)
+maxPhRot_Beamcv = np.delete(maxPhRot_Beamcv, 0, axis=0)
+MedPhRot_Colmv_v = np.delete(MedPhRot_Colmv_v, 0, axis=0)
+MedPhRot_Beammv_v = np.delete(MedPhRot_Beammv_v, 0, axis=0)
+maxSDRBdgv = np.delete(maxSDRBdgv, 0, axis=0)
 time_elapsed = datetime.now() - start_time
 print('Time elapsed (hh:mm:ss.ms) {}'.format(time_elapsed))
 controlTimev = np.around(controlTimev, decimals=2)

@@ -27,12 +27,13 @@ def data_columns_table(self):
         h = DC.h / cm
         roCol = DC.ro
         db = DC.db / mm
+        de = DC.de / mm
         nbH = DC.nbH
         nbB = DC.nbB
         nsH = DC.nsH
         nsB = DC.nsB
         sst = DC.sst / cm
-        registro = RegistroColumns(self.ui.tbl_data_design_columns, DC.EleTag, b, h, roCol, db, nbH, nbB, nsH, nsB,
+        registro = RegistroColumns(self.ui.tbl_data_design_columns, DC.EleTag, b, h, roCol, db, de, nbH, nbB, nsH, nsB,
                                    sst)
         self.registros_cols.append(registro)
 
@@ -214,7 +215,7 @@ def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys):
         print('Minimum spacing of stirrups is not met in column ' + str(EleTag))
     Vn = Vc + Ave*fys*d/se
     # print('Vn =', Vn)
-    return se, neB, neH, Vn
+    return se, neB, neH, Vn, dst
 
 # Compression block parameters beta as function f'c
 
@@ -238,20 +239,12 @@ span_v = self.ui.span_v.text()
 span_v = span_v.split(',')
 span_v = np.array(span_v, dtype=float)
 fy = float(self.ui.fy.text()) * MPa
-# fys = float(self.ui.fys.text()) * MPa
-fys = fy
+fys = float(self.ui.fys.text()) * MPa
 fcB = float(self.ui.fcB.text()) * MPa
 fcC = float(self.ui.fcC.text()) * MPa
-R = float(self.ui.R.text())
-Cd = float(self.ui.Cd.text())
-Omo = float(self.ui.Omo.text())
-Sds = float(self.ui.Sds.text())
-Sd1 = float(self.ui.Sd1.text())
-Tl = float(self.ui.Tl.text())
 WDL = Lafg * DL
 WDLS = Lafs * DL
 WLL = Lafg * LL
-
 plt.close('all')
 op.wipe()
 op.model('Basic', '-ndm', 2, '-ndf', 3)
@@ -359,6 +352,11 @@ num_beams = num_elems - num_cols
 Pvig = ABeam * GConc
 PColi = AColi * GConc
 PCole = ACole * GConc
+PColSlabD, PColSlabL = 0, 0
+if self.ui.radioButtonSpatial.isChecked() and Lafs > Lafg:
+    PColSlabD = (Lafs-Lafg)*WDL+Pvig*Lafs
+    PColSlabL = (Lafs-Lafg)*WLL
+
 op.timeSeries('Linear', 1)
 op.pattern('Plain', 1, 1)
 for Element in Elements:
@@ -368,6 +366,7 @@ for Element in Elements:
         else:
             PCol = PColi
         op.eleLoad('-ele', Element.EleTag, '-type', '-beamUniform', 0, -PCol)
+        op.eleLoad('-ele', Element.EleTag, '-type', '-beamPoint', 0, 1, -PColSlabD)
     if ListNodes[Element.Nod_ini, 2] == ListNodes[Element.Nod_end, 2]:
         op.eleLoad('-ele', Element.EleTag, '-type', '-beamUniform', -Pvig - WDL)
 
@@ -384,12 +383,14 @@ for Element in Elements:
     Forces.insert(0, Element.EleTag)
     ElemnsForceD.append(Forces)
 ElemnsForceD = np.array(ElemnsForceD)
-Wtotal = np.sum(ElemnsForceD[:len(Loc_span), 2]) * Lafs / Lafg #debo mirar esto
+Wtotal = np.sum(ElemnsForceD[:len(Loc_span), 2]) * Lafs/Lafg #debo mirar esto
 
 op.loadConst('-time', 0.0)
 op.timeSeries('Linear', 2)
 op.pattern('Plain', 2, 1)
 for Element in Elements:
+    if ListNodes[Element.Nod_ini, 1] == ListNodes[Element.Nod_end, 1]:
+        op.eleLoad('-ele', Element.EleTag, '-type', '-beamPoint', 0, 1, -PColSlabL)
     if ListNodes[Element.Nod_ini, 2] == ListNodes[Element.Nod_end, 2]:
         op.eleLoad('-ele', Element.EleTag, '-type', '-beamUniform', -WLL)
 op.analyze(1)
@@ -404,22 +405,99 @@ ElemnsForceDL = np.array(ElemnsForceDL)
 # Create a Plain load pattern for seismic loading with a Linear TimeSeries (LLEF)
 op.loadConst('-time', 0.0)
 Htotal = Loc_heigth[-1]
-Ct = 0.0466
-x = 0.9
-Ta = Ct * Htotal ** x
-print('Ta =', Ta)
-Ie = 1.0
-Ts = Sd1 / Sds
-if Ta <= Ts:
-    Sa = max(Sds * Ie / R, 0.044 * Sds * Ie, 0.01)
-elif Ta <= Tl:
-    Sa = max(Sd1 * Ie / Ta / R, 0.044 * Sds * Ie, 0.01)
-else:
-    Sa = max(Sd1 * Tl * Ie / (Ta ** 2) / R, 0.044 * Sds * Ie, 0.01)
-if Ta <= 0.5:
+SeismicLoadCode = self.ui.comboBoxSeismicLoadCode.currentText()
+Ie = float(self.ui.Ie.text())
+R = float(self.ui.R.text())
+Cd = float(self.ui.Cd.text())
+Omo = float(self.ui.Omo.text())
+if SeismicLoadCode == 'ASCE 7-16':
+    Sds = float(self.ui.Sds.text())
+    Sd1 = float(self.ui.Sd1.text())
+    Tl = float(self.ui.Tl.text())
+    Ct = 0.0466
+    x = 0.9
+    Ta = Ct * Htotal ** x
+    print('Ta =', Ta)
+    Cu = np.interp(Sd1, [0, 0.1, 0.15, 0.2, 0.3, 5], [1.7, 1.7, 1.6, 1.5, 1.4, 1.4])
+    print('Cu =', Cu)
+    T = Cu * Ta
+    Ts = Sd1 / Sds
+    if T <= Ts:
+        Sa = max(Sds * Ie / R, 0.044 * Sds * Ie, 0.01)
+    elif T <= Tl:
+        Sa = max(Sd1 * Ie / T / R, 0.044 * Sds * Ie, 0.01)
+    else:
+        Sa = max(Sd1 * Tl * Ie / (T ** 2) / R, 0.044 * Sds * Ie, 0.01)
+elif SeismicLoadCode == 'NSR-10':
+    Cd = R
+    Aa = float(self.ui.Aa_10.text())
+    Av = float(self.ui.Av_10.text())
+    Fa = float(self.ui.Fa_10.text())
+    Fv = float(self.ui.Fv_10.text())
+    Sds = 2.5*Aa
+    Ct = 0.047
+    x = 0.9
+    Ta = Ct * Htotal ** x
+    print('Ta =', Ta)
+    Cu = max(1.75-1.2*Av*Fv, 1.2)
+    print('Cu =', Cu)
+    T = Cu * Ta
+    Tc = 0.48*(Av*Fv)/(Aa*Fa)
+    Tl = 2.4*Fv
+    if T <= Tc:
+        Sa = 2.5*Aa*Fa*Ie/R
+    elif T <= Tl:
+        Sa = 1.2*Av*Fv*Ie/T/R
+    else:
+        Sa = 1.2*Av*Fv*Tl*Ie/T**2/R
+elif SeismicLoadCode == 'NSR-98':
+    Cd = R
+    Aa = float(self.ui.Aa_98.text())
+    S = float(self.ui.S_98.text())
+    Sds = 2.5*Aa
+    Ct = 0.08
+    x = 3/4
+    Ta = Ct * Htotal ** x
+    print('Ta =', Ta)
+    Cu = 1.2
+    print('Cu =', Cu)
+    T = Cu * Ta
+    Tc = 0.48*S
+    Tl = 2.4*S
+    if T <= Tc:
+        Sa = 2.5*Aa*Ie/R
+    elif T <= Tl:
+        Sa = 1.2*Aa*S*Ie/T/R
+    else:
+        Sa = Aa*Ie/R
+elif SeismicLoadCode == 'CCCSR-84':
+    Aa = float(self.ui.Aa_84.text())
+    Av = float(self.ui.Av_84.text())
+    S = float(self.ui.S_84.text())
+    Sds = 2.5*Aa
+    Ct = 0.08
+    x = 3/4
+    Ta = Ct * Htotal ** x
+    print('Ta =', Ta)
+    Cu = 1.2
+    print('Cu =', Cu)
+    T = Cu * Ta
+    Tc = 0.48*S
+    Tl = 2.4*S
+    if S >= 1.5 and Aa >= 0.30:
+        Sa = min(2.0*Aa*Ie/R, 1.2*Av*S*Ie/T**(2/3)/R)
+    else:
+        Sa = min(2.5*Aa*Ie/R, 1.2*Av*S*Ie/T**(2/3)/R)
+elif SeismicLoadCode == 'Weight Percentage':
+    Cd = 1
+    Sa = float(self.ui.WP.text())/100
+    Sds = Sa
+    T = 0.5  # an arbitrary period is taken provided that the distribution is essentially triangular k = 1
+    Omo = float(self.ui.Omo.text())
+if T <= 0.5:
     k = 1.
-elif Ta <= 2.5:
-    k = 0.75 + 0.5 * Ta
+elif T <= 2.5:
+    k = 0.75 + 0.5 * T
 else:
     k = 2.
 sumH = np.sum(np.power(Loc_heigth, k))
@@ -661,7 +739,7 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
 
         Vu = max([VUa, min([VUb, VUc])])  # Cortante maximo de diseño
         # print('Vu', Vu)
-        sst, nsB, nsH, Vn = AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys)
+        sst, nsB, nsH, Vn, de = AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys)
         NUG1 = abs(PID + 0.25 * PIL)
         NUG2 = abs(PED + 0.25 * PEL)
         NUD1 = abs(PID + 0.25 * PIL + PIE)
@@ -670,7 +748,7 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         MUD2 = abs(MED + 0.25 * MEL + MEE)
         VUD1 = abs(VID + 0.25 * VIL + VIE)
         VUD2 = abs(VED + 0.25 * VEL + VEE)
-        DataColDesing.append(ColDesing(Ele.EleTag, b, h, nbH, nbB, db, As, Pu_v, Mu_v, fiPn, fiMn, Mn_i, d,
+        DataColDesing.append(ColDesing(Ele.EleTag, b, h, nbH, nbB, db, de, As, Pu_v, Mu_v, fiPn, fiMn, Mn_i, d,
                                        dist, ro, Mu_i, sst, nsB, nsH, Ele.Nod_ini, Ele.Nod_end, NUD1, NUD2,
                                        NUG1, NUG2, MUD1, MUD2, VUD1, VUD2, ColBeamStr, Vn))
 
