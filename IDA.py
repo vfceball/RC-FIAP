@@ -31,7 +31,7 @@ error_log.write('^^^^^^^^ STARTING IDA HTF ^^^^^^^^')
 # Get the ground motion set information
 nmsfile = self.ui.nmsfile.text()
 print('nmsfile =', nmsfile)
-with open('Earthquakes/' + nmsfile + '.txt', "r") as archivo:
+with open('IDA_Gmotions/' + nmsfile + '.txt', "r") as archivo:
     eqnms_list = [linea.rstrip() for linea in archivo]
 print('eqnms_list =', eqnms_list)
 nrecs = len(eqnms_list)
@@ -41,10 +41,7 @@ Sa_maxv, IMv, RDR_maxv, SDR_maxv = np.zeros([nrecs, maxRuns+1]), np.zeros([nrecs
 
 for i in range(nrecs):
     IM_log = open('IDA/IM_' + str(i) + '.txt', "w")
-    # EQname = 'Earthquakes/' + eqnms_list[ind] + '.at2'
-    # acc, dt, npts, eqname = load_PEERNGA_record(EQname)
-
-    EQname = 'Earthquakes/' + eqnms_list[i]
+    EQname = 'IDA_Gmotions/' + eqnms_list[i]
     inFile = EQname + '.at2'
     outFile = EQname + '.g4'
     dt, npts = ReadRecord(inFile, outFile)

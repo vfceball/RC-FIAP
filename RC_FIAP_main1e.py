@@ -952,8 +952,8 @@ class MyForm(QDialog):
             PDG = op.eleResponse(Ele.EleTag, 'plasticDeformation')
             PDG_Cols[ind, :] = [PDG[1], PDG[2]]
 
-        print('PDG_Cols', PDG_Cols)
-        print('PDG_Beams', PDG_Beams)
+        # print('PDG_Cols', PDG_Cols)
+        # print('PDG_Beams', PDG_Beams)
         op.loadConst('-time', 0.0)
         print("Model Nonlinear Built")
 
@@ -1236,14 +1236,14 @@ class MyForm(QDialog):
             for (Ele, ind) in zip(EleCol, range(num_cols)):
                 PD = op.eleResponse(Ele.EleTag, 'plasticDeformation')
                 PD_Cols[ind, :] = [PD[1], PD[2]]
-            print('PD_Cols', PD_Cols)
-            print('PD_Beams', PD_Beams)
+            # print('PD_Cols', PD_Cols)
+            # print('PD_Beams', PD_Beams)
 
             PD_Beams = abs(np.array(PDG_Beams + PD_Beams))
             PD_Cols = abs(np.array(PDG_Cols + PD_Cols))
             # T_v = np.vstack((T1_v, T2_v))
-            print('PD_Cols', PD_Cols)
-            print('PD_Beams', PD_Beams)
+            # print('PD_Cols', PD_Cols)
+            # print('PD_Beams', PD_Beams)
 
             if ok != 0:
                 print('DispControl Analysis FAILED')
@@ -1468,13 +1468,13 @@ class MyForm(QDialog):
         op.loadConst('-time', 0.0)
         op.timeSeries('Linear', 2)
         op.pattern('Plain', 2, 1)
-        for (node, fp, ind) in zip(ListNodesDrift, Fp, range(floors_num)):
-            op.load(int(node[0]), fp, 0.0, 0.0)
+        # for (node, fp, ind) in zip(ListNodesDrift, Fp, range(floors_num)):
+        #     op.load(int(node[0]), fp, 0.0, 0.0)
         num_nodes = len(Loc_span) * len(Loc_heigth)
-        # for (h_floor, fp) in zip(Loc_heigth[1:], Fp):
-        #     for ind_node in range(num_nodes):
-        #         if ListNodes[ind_node, 2] == h_floor:
-        #             op.load(ind_node, fp, 0.0, 0.0)
+        for (h_floor, fp) in zip(Loc_heigth[1:], Fp):
+            for ind_node in range(num_nodes):
+                if ListNodes[ind_node, 2] == h_floor:
+                    op.load(ind_node, fp, 0.0, 0.0)
         Htotal = Loc_heigth[-1]
         Der_obj = float(self.ui.Der_obj.text())
         Des_obj = Der_obj * Htotal  # Desplazamiento objetivo
