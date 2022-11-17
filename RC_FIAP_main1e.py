@@ -367,6 +367,7 @@ class MyForm(QDialog):
         self.ui.CSS.clicked.connect(self.CSS)
         self.ui.PlotIDA.clicked.connect(self.PlotIDA)
         self.ui.PlotCSS.clicked.connect(self.PlotCSS)
+        self.ui.PlotCSSMaxFloors.clicked.connect(self.PlotCSSMaxFloors)
         self.ui.progressBarPushover.hide()
         self.ui.progressBarIDA.hide()
         self.ui.progressBarBeamDesign.hide()
@@ -2192,7 +2193,7 @@ class MyForm(QDialog):
         global Loc_span, Loc_heigth, ListNodes, Elements, DataBeamDesing, DataColDesing, Wtotal, num_elems, \
             ListNodesDrift, cIndex, ListNodesBasal, T1m, Wtotal, IM, Sa_max, RDR_max, SDR_max, nrecs, RA_max, EleCol, \
             EleBeam, DataColPhl, VnVu_max, list_beams, list_cols, maxPhRot_Colv, DataBeamPhl, maxPhRot_Beamv,\
-            maxSDRBdg, maxSDRBdgv, maxPhRot_Colcv, maxPhRot_Beamcv, MedPhRot_Colmv_v, MedPhRot_Beammv_v
+            maxSDRBdg, maxSDRBdgv, maxAccelBdgv, maxPhRot_Colcv, maxPhRot_Beamcv, MedPhRot_Colmv_v, MedPhRot_Beammv_v
         if not os.path.exists("CSS"):
             os.mkdir("CSS")
         exec(open("CSS.py").read())
@@ -2209,6 +2210,7 @@ class MyForm(QDialog):
         np.savetxt('CSS/' + OutputCSSFile + '_PhRot1_Col_max.txt', maxPhRot_Colcv, fmt='%.6f')
         np.savetxt('CSS/' + OutputCSSFile + '_PhRot1_Beam_max.txt', maxPhRot_Beamcv, fmt='%.6f')
         np.savetxt('CSS/' + OutputCSSFile + '_SDR_Floor_max.txt', maxSDRBdgv, fmt='%.6f')
+        np.savetxt('CSS/' + OutputCSSFile + '_Accel_Floor_max.txt', maxAccelBdgv, fmt='%.6f')
         np.savetxt('CSS/' + OutputCSSFile + '_PhRot_Col_Med.txt', MedPhRot_Colmv_v, fmt='%.6f')
         np.savetxt('CSS/' + OutputCSSFile + '_PhRot_Beam_Med.txt', MedPhRot_Beammv_v, fmt='%.6f')
 
@@ -2217,6 +2219,11 @@ class MyForm(QDialog):
 
     def PlotCSS(self):
         exec(open("FragilityFunctionCSS.py").read())
+
+    def PlotCSSMaxFloors(self):
+        exec(open("CSSMaxFloors.py").read())
+
+
 
 
 # from ReadRecord import ReadRecord

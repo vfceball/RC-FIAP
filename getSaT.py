@@ -77,4 +77,4 @@ def getSaT(EQ, dt, T, xi, npts):
 		Sa = Sd*w**2/g
 		pga = max(max(accg), -min(accg))
 
-	return Sa, Sv, Sd, pga, amax
+	return Sa, Sv, Sd, pga, amax, accg

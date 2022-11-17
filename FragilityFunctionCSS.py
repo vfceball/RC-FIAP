@@ -87,8 +87,6 @@ nSDR = CSS_SDRCurves.size
 #     Sa_max = Sa_max[:ind + 1]
 #     IM = IM[:ind + 1]
 
-
-
 ax1.scatter(SDR_max*100, IM, facecolors='none', edgecolors='b')
 ax2.scatter(RA_max*100, IM, facecolors='none', edgecolors='b')
 ax3.scatter(VuVn_max, IM,  facecolors='none', edgecolors='b')

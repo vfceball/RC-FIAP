@@ -533,6 +533,18 @@ elif SeismicLoadCode == 'Weight Percentage':
     Sds = Sa
     T = 0.5  # an arbitrary period is taken provided that the distribution is essentially triangular k = 1
     Omo = float(self.ui.Omo.text())
+elif SeismicLoadCode == 'Spectra file':
+    SpecFile = self.ui.SpectraFile.text()
+    Spec = np.loadtxt('Spectra/' + SpecFile + '.txt')
+    Ct = 0.08
+    x = 3/4
+    Ta = Ct * Htotal ** x
+    print('Ta =', Ta)
+    Cu = 1.2
+    print('Cu =', Cu)
+    T = Cu * Ta
+    Sds = 2.5*Spec[0, 1]
+    Sa = np.interp(T, Spec[:, 0], Spec[:, 1])/R
 if T <= 0.5:
     k = 1.
 elif T <= 2.5:

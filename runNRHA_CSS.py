@@ -1,5 +1,5 @@
 def runNRHA_CSS(Dt, Tmax, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal, EleCol, EleBeam, LC, DataColPhl,
-                DataColDesing, ListNodesLC, EQname, HL_directory, ListNodes, DataBeamPhl, DataBeamDesing):
+                DataColDesing, ListNodesLC, EQname, HL_directory, ListNodes, DataBeamPhl, DataBeamDesing, accelg):
     # --------------------------------------------------
     # Description of Parameters
     # --------------------------------------------------
@@ -14,6 +14,7 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal, 
     import numpy as np  # load the numpy module, calling it np
     print("Starting runNRHA")
 
+    timev = np.arange(0, Tmax, Dt)
     op.constraints('Transformation')
     op.numberer('RCM')
     op.system('BandGeneral')
@@ -57,7 +58,7 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal, 
     PhRot_Beam_v = np.zeros(floors_num)
     PhRot_Beamm_v = np.zeros((1, floors_num, 2*(axes_num-1)))
     PhRot_Beamc_v = np.zeros(floors_num)
-    maxSDR_v = np.zeros(floors_num)
+    maxSDR_v, maxAccel_v = np.zeros(floors_num), np.zeros(floors_num)
 
     # if self.ui.checkBoxSaveCSS.isChecked() == True:
     #     data_dir = EQname.replace('gmotions', 'Data')
@@ -74,6 +75,7 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal, 
 
         # Do the analysis
         vForceSec01_Beams, vDefoSec01_Beams, vForceSec06_Beams, vDefoSec06_Beams = [], [], [], []
+        # accelg = op.getLoadFactor(400)
         ok = op.analyze(1, Dt)
         controlTime = op.getTime()  # Update the control time
 
@@ -166,7 +168,8 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal, 
         # Calculation of maximum Drift between floors
         maxDriftPiso = 0.0
         nfloor = 0
-        maxSDR = np.zeros(floors_num)
+        maxSDR, maxAccel = np.zeros(floors_num), np.zeros(floors_num)
+        Accelg = np.interp(controlTime, timev, accelg)
         # print('maxSDR', maxSDR)
         for (nod_ini, nod_end) in zip(ListNodesDrift[:-1, 0], ListNodesDrift[1:, 0]):
             # print('nod_ini ', nod_ini, 'nod_end', nod_end)
@@ -179,14 +182,17 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal, 
             desp_s = op.nodeDisp(nod_end, 1)
             desp_piso = abs(desp_s - desp_i)
             drift_piso = desp_piso / hpiso
+            accel_floor = abs(op.nodeAccel(nod_end, 1) + Accelg)
             if drift_piso >= maxDriftPiso:
                 maxDriftPiso = drift_piso
             maxSDR[nfloor] = drift_piso
+            maxAccel[nfloor] = accel_floor
             nfloor += 1
             # print('maxSDR', maxSDR)
             # print('nfloor', nfloor)
         maxDriftPiso_v = np.append(maxDriftPiso_v, maxDriftPiso)
         maxSDR_v = np.vstack((maxSDR_v, maxSDR))
+        maxAccel_v = np.vstack((maxAccel_v, maxAccel))
 
         VBasal = 0.
         op.reactions()
@@ -308,6 +314,7 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal, 
     # print('max =', maxPhRot_Colc)
     maxPhRot_Beamc = np.max(PhRot_Beamc_v, axis=0)
     maxSDRBdg = np.max(maxSDR_v, axis=0)
+    maxAccelBdg = np.max(maxAccel_v, axis=0)
     MaxPhRot_Colm_v = np.max(PhRot_Colm_v, axis=0)
     MedPhRot_Colm_v = np.median(MaxPhRot_Colm_v, axis=1)
     # prueba = np.max(MaxPhRot_Colm_v, axis=1)
@@ -324,7 +331,8 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal, 
 
     print('PeakDemand:{0:.5f}'.format(md))  # Print to the max demand
     if cIndex == -1:
-        Test = ':::::: ANALYSIS FAILED TO CONVERGE at ', controlTime, ' of ', Tmax, ' :::::', 'Max Drift Piso=', maxDriftPisoBdg
+        Test = ':::::: ANALYSIS FAILED TO CONVERGE at ', controlTime, ' of ', Tmax, ' :::::', 'Max Drift Piso=',\
+               maxDriftPisoBdg
     if cIndex == 0:
         Test = '######## ANALYSIS COMPLETED SUCCESSFULLY #####', 'Max Drift Piso=', maxDriftPisoBdg
     if cIndex == 1:
@@ -335,4 +343,5 @@ def runNRHA_CSS(Dt, Tmax, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal, 
     # Test = "".join(map(str, Test))
 
     return cIndex, maxDriftTecho, maxDriftPisoBdg, maxVBasal, maxRABdg, maxVuVnBdg, Test, controlTime, Tmax,\
-           maxPhRot_Col, maxPhRot_Beam, maxSDRBdg, maxPhRot_Colc, maxPhRot_Beamc, MedPhRot_Colm_v, MedPhRot_Beamm_v
+           maxPhRot_Col, maxPhRot_Beam, maxSDRBdg, maxAccelBdg, maxPhRot_Colc, maxPhRot_Beamc, MedPhRot_Colm_v,\
+           MedPhRot_Beamm_v

@@ -87,23 +87,30 @@ IM_cap = np.sort(IM_cap)
 fig4 = self.ui.FragilityCurve.canvas.axes
 fig4.clear()
 ax4 = fig4.add_subplot(111)
-
+markers = ['^', 's', 'p', 'h', '8']
+colors = np.array(["green", "yellow", "red", "pink", "black", "orange", "purple", "beige", "brown", "gray", "cyan",
+                   "magenta"])
 if nrecs >= 5:
     for jj in range(nSDR):
         theta_hat_mom = np.exp(np.mean(np.log(IM_cap[jj, :])))
         beta_hat_mom = np.std(np.log(IM_cap[jj, :]))
         x_vals = np.arange(0.01, np.ceil(np.max(IM_cap[jj, :])), 0.01)
         p_collapse = norm.cdf(np.log(x_vals/theta_hat_mom)/beta_hat_mom)
-        ax4.plot(IM_cap[jj, :],  np.arange(IM_cap[jj, :].size)/IM_cap[jj, :].size, 'b.')
-        ax4.plot(x_vals, p_collapse, 'b-')
-        Sa_p_05 = np.interp(0.5, p_collapse, x_vals)
-        ax4.annotate('j =' + str(SDRCurves[jj]*100) + '[%]', xy=(Sa_p_05, 0.5), xycoords='data',
-                    xytext=(20, 0), textcoords='offset points',
-                    arrowprops=dict(arrowstyle="->"))
+        ax4.scatter(IM_cap[jj, :], np.arange(IM_cap[jj, :].size)/IM_cap[jj, :].size, marker=markers[jj],
+                    s=8, c=colors[jj])
+
+        ax4.plot(x_vals, p_collapse, c=colors[jj],
+                 label=r'$j = %1.1f \/\/\theta = %1.2f \/\/\beta = %1.2f$' % (SDRCurves[jj] * 100, theta_hat_mom,
+                                                                              beta_hat_mom))
+        # Sa_p_05 = np.interp(0.5, p_collapse, x_vals)
+        # ax4.annotate('j =' + str(SDRCurves[jj]*100) + '[%]', xy=(Sa_p_05, 0.5), xycoords='data',
+        #             xytext=(20, 0), textcoords='offset points',
+        #             arrowprops=dict(arrowstyle="->"))
     ax4.set_ylabel(r'$P(SDR_{max}>j|S_a=y)$')
     ax4.set_xlabel(r'$S_a(T_1)$ [g]')
     ax4.set_xlim([0, 5])
     ax4.set_ylim(bottom=0)
     ax4.grid(True)
+    ax4.legend(loc='lower right', fontsize=8, fancybox=True, shadow=True, ncol=1)
     self.ui.FragilityCurve.canvas.draw()
     self.ui.FragilityCurve.canvas.show()

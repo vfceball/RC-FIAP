@@ -48,11 +48,11 @@ for i in range(nrecs):
     dur = npts * dt
 
     if IMtype == 'PGA':
-        Sa, Sv, Sd, pga, amax = getSaT(outFile, dt, 0.0, xi, npts)  # Get the PGA of the record in the X direction
+        Sa, Sv, Sd, pga, amax, accelg = getSaT(outFile, dt, 0.0, xi, npts)  # Get the PGA of the record in the X direction
         IMgeomean = pga
 
     elif IMtype == 'Sa(T1)':
-        Sa, Sv, Sd, pga, amax = getSaT(outFile, dt, T1m, xi, npts)  # Get the PGA of the record in the X direction
+        Sa, Sv, Sd, pga, amax, accelg = getSaT(outFile, dt, T1m, xi, npts)  # Get the PGA of the record in the X direction
         IMgeomean = Sa
         print('T1m ={0:.3f} Sa ={1:.3f} amax= {2:.3f} pga = {3:.3f}'.format(T1m, Sa, amax, pga))
 
