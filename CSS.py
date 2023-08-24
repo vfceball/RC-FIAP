@@ -1,12 +1,13 @@
-global Loc_span, Loc_heigth, ListNodes, Elements, DataBeamDesing, DataColDesing, Wtotal, num_elems, ListNodesDrift, \
+global Loc_span, Loc_heigth, ListNodes, Elements, DataBeamDesign, DataColDesign, Wtotal, num_elems, ListNodesDrift, \
     cIndex, ListNodesBasal, T1m, Wtotal, IM, Sa_max, RDR_max, SDR_max, nrecs, RA_max, EleCol, EleBeam, DataColPhl,\
-    VnVu_max, HL_directory, list_beams, list_cols, maxPhRot_Colv, DataBeamPhl, maxPhRot_Beamv, maxSDRBdg, maxSDRBdgv,\
-    maxAccelBdgv, maxPhRot_Colcv, maxPhRot_Beamcv, MedPhRot_Colmv_v, MedPhRot_Beammv_v, HL_v
+    VnVu_max, HL_directory, list_beams, list_cols, DataBeamPhl, maxSDRBdg, maxSDRBdgv,\
+    maxAccelBdgv, maxPhRot_Colcv, maxPhRot_Beamcv, MedPhRot_Colmv_v, MedPhRot_Beammv_v, HL_v, ResiBdg, ResiBdgv, \
+    maxCountColapv, SDRBdgVColapv
 
 from datetime import datetime
 from ReadRecord import ReadRecord
 from getSaT import getSaT
-from runNRHA_CSS import runNRHA_CSS
+from runNRHA_CSS1 import runNRHA_CSS
 from Exci_pattern import Exci_pattern
 
 
@@ -49,15 +50,18 @@ ind = 1
 floors_num = len(Loc_heigth) - 1
 Sa_max, RDR_max, SDR_max, IM, RA_max, VnVu_max = [], [], [], [], [], []
 Full_eqnms_list, Full_sf_list = [], []
-EQnamev, Testv, HL_v, EQname_v, controlTimev, Tmaxv = [], [], [], [], [], []
-maxPhRot_Colv = np.zeros(floors_num)
-maxPhRot_Beamv = np.zeros(floors_num)
+EQnamev, Testv, HL_v, EQname_v, controlTimev, Tmaxv, Tendv, res_driftv = [], [], [], [], [], [], [], []
+# maxPhRot_Colv = np.zeros(floors_num)
+# maxPhRot_Beamv = np.zeros(floors_num)
 maxPhRot_Colcv = np.zeros(floors_num)
 maxPhRot_Beamcv = np.zeros(floors_num)
 maxSDRBdgv = np.zeros(floors_num)
+ResiBdgv = np.zeros(floors_num)
 maxAccelBdgv = np.zeros(floors_num)
+maxCountColapv = np.zeros(floors_num)
 MedPhRot_Colmv_v = np.zeros(floors_num)
 MedPhRot_Beammv_v = np.zeros(floors_num)
+SDRBdgVColapv = np.zeros(floors_num)
 
 while os.path.exists(HL_directory + '/Hazard_Level_' + str(ind)):
     data_dir = HL_directory + '/Hazard_Level_' + str(ind) + '/Data'
@@ -128,11 +132,12 @@ for (EQname, sf) in zip(Full_eqnms_list, Full_sf_list):
         op.recorder('Node', '-file', data_dir + '_VertNodes.out', '-closeOnWrite',
                     '-time', '-nodeRange', int(sListNodes[0]), int(sListNodes[-1]), '-dof', 2, 'disp')
 
-    cIndex, mDT, mDPB, maxVB, maxRA, maxVnVu, Test, controlTime, Tmax, maxPhRot_Col, maxPhRot_Beam, maxSDRBdg,\
-    maxAccelBdg, maxPhRot_Colc, maxPhRot_Beamc,\
-    MedPhRot_Colm_v, MedPhRot_Beamm_v = runNRHA_CSS(dt, dur, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal,
-                                                    EleCol, EleBeam, LC, DataColPhl, DataColDesing, ListNodesLC, EQname,
-                                                    HL_directory, ListNodes, DataBeamPhl, DataBeamDesing, accelg)
+
+    mDT, mDPB, maxVB, maxVnVu, Test, controlTime, Tmax, Tend, maxSDRBdg, maxAccelBdg, maxPhRot_Colc, maxCountColapV,\
+        maxPhRot_Beamc, res_drift, MedPhRot_Colm_v, MedPhRot_Beamm_v, ResiBdg, SDRBdgVColap \
+        = runNRHA_CSS(dt, dur, Loc_heigth, Loc_span, ListNodesDrift, ListNodesBasal, EleCol, EleBeam, LC, DataColPhl,
+                      DataColDesign, ListNodesLC, EQname, HL_directory, ListNodes, DataBeamPhl, DataBeamDesign, accelg,
+                      T1m)
 
     if self.ui.checkBoxSaveCSS.isChecked() == True:
         DefoSec_Beams = np.loadtxt(data_dir + '_DefoSec_Beams.out')
@@ -177,35 +182,46 @@ for (EQname, sf) in zip(Full_eqnms_list, Full_sf_list):
     RDR_max = np.append(RDR_max, mDT)
     SDR_max = np.append(SDR_max, mDPB)
     EQnamev = np.append(EQnamev, EQname)
-    RA_max = np.append(RA_max, maxRA)
+    # RA_max = np.append(RA_max, maxRA)
     VnVu_max = np.append(VnVu_max, maxVnVu)
     Testv = np.append(Testv, Test)
     controlTimev = np.append(controlTimev, controlTime)
     Tmaxv = np.append(Tmaxv, Tmax)
-    maxPhRot_Colv = np.vstack((maxPhRot_Colv, maxPhRot_Col))
-    maxPhRot_Beamv = np.vstack((maxPhRot_Beamv, maxPhRot_Beam))
+    Tendv = np.append(Tendv, Tend)
+    res_driftv = np.append(res_driftv, res_drift)
+    # maxPhRot_Colv = np.vstack((maxPhRot_Colv, maxPhRot_Col))
+    # maxPhRot_Beamv = np.vstack((maxPhRot_Beamv, maxPhRot_Beam))
     maxPhRot_Colcv = np.vstack((maxPhRot_Colcv, maxPhRot_Colc))
     maxPhRot_Beamcv = np.vstack((maxPhRot_Beamcv, maxPhRot_Beamc))
     MedPhRot_Colmv_v = np.vstack((MedPhRot_Colmv_v, MedPhRot_Colm_v))
     MedPhRot_Beammv_v = np.vstack((MedPhRot_Beammv_v, MedPhRot_Beamm_v))
     maxSDRBdgv = np.vstack((maxSDRBdgv, maxSDRBdg))
+    ResiBdgv = np.vstack((ResiBdgv, ResiBdg))
     maxAccelBdgv = np.vstack((maxAccelBdgv, maxAccelBdg))
+    maxCountColapv = np.vstack((maxCountColapv, maxCountColapV))
+    SDRBdgVColapv = np.vstack((SDRBdgVColapv, SDRBdgVColap))
     op.wipe
-maxPhRot_Colv = np.delete(maxPhRot_Colv, 0, axis=0)
-maxPhRot_Beamv = np.delete(maxPhRot_Beamv, 0, axis=0)
+# maxPhRot_Colv = np.delete(maxPhRot_Colv, 0, axis=0)
+# maxPhRot_Beamv = np.delete(maxPhRot_Beamv, 0, axis=0)
 maxPhRot_Colcv = np.delete(maxPhRot_Colcv, 0, axis=0)
 maxPhRot_Beamcv = np.delete(maxPhRot_Beamcv, 0, axis=0)
 MedPhRot_Colmv_v = np.delete(MedPhRot_Colmv_v, 0, axis=0)
 MedPhRot_Beammv_v = np.delete(MedPhRot_Beammv_v, 0, axis=0)
 maxSDRBdgv = np.delete(maxSDRBdgv, 0, axis=0)
+ResiBdgv = np.delete(ResiBdgv, 0, axis=0)
 maxAccelBdgv = np.delete(maxAccelBdgv, 0, axis=0)
+maxCountColapv = np.delete(maxCountColapv, 0, axis=0)
+SDRBdgVColapv = np.delete(SDRBdgVColapv, 0, axis=0)
 time_elapsed = datetime.now() - start_time
 print('Time elapsed (hh:mm:ss.ms) {}'.format(time_elapsed))
 controlTimev = np.around(controlTimev, decimals=2)
 Tmaxv = np.around(Tmaxv, decimals=2)
+Tendv = np.around(Tendv, decimals=2)
+# res_driftv = np.around(res_driftv*100, decimals=2)
 maxDriftPisoBdg = np.around(SDR_max*100, decimals=2)
-Run_Earthquake = np.vstack((HL_v, EQname_v, controlTimev, Tmaxv, maxDriftPisoBdg))
+Run_Earthquake = np.vstack((HL_v, EQname_v, controlTimev, Tmaxv, maxDriftPisoBdg, Tendv, res_driftv))
 print(Run_Earthquake.T)
-np.savetxt('CSS/' + OutputCSSFile + '_Test_Run_Earthquake.txt', Run_Earthquake.T, fmt='%s, %s, %s, %s, %s')
+np.savetxt('CSS/' + OutputCSSFile + '_Test_Run_Earthquake.txt', Run_Earthquake.T, fmt='%s, %s, %s, %s, %s, %s, %s')
+np.savetxt('CSS/' + OutputCSSFile + '_Colors.txt', HL_v, fmt='%s')
 # Run_Earthquake = pd.DataFrame(Run_Earthquake).T
 # Run_Earthquake.to_excel(excel_writer="CSS/Test_Run_Earthquake.xlsx")

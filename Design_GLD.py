@@ -68,11 +68,11 @@ def beta1(fc):
 
 # Design load combinations
 def Combo_ACI(DL, LL, E):
-    U1 = 1.2 * DL + 1.6 * LL
-    U2 = 1.2 * DL + 1.0 * LL + 1.0 * E
-    U3 = 1.2 * DL + 1.0 * LL - 1.0 * E
-    U4 = 0.9 * DL + 1.0 * E
-    U5 = 0.9 * DL - 1.0 * E
+    U1 = 1.4 * DL + 1.7 * LL
+    U2 = 0.75 * (1.4 * DL + 1.7 * LL + 1.7 * 1.1 * E)
+    U3 = 0.75 * (1.4 * DL + 1.7 * LL - 1.7 * 1.1 * E)
+    U4 = 0.9 * DL + 1.3 * 1.1 * E
+    U5 = 0.9 * DL - 1.3 * 1.1 * E
     return U1, U2, U3, U4, U5
 
 # Flexural beams design
@@ -306,8 +306,8 @@ def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys):
     Ag = b * h
     dp = cover + dst + db / 2
     d, dbc = h - dp, b - dp
-    neH = floor(nbH / 2) + 1
-    neB = floor(nbB / 2) + 1
+    neH = ceil(h / 0.3) + 1
+    neB = ceil(b / 0.3) + 1
 
     Ash_H = neH * Ast
     Ash_B = neB * Ast
@@ -317,9 +317,9 @@ def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys):
     if Vs > 4. * Vc:
         print("reshape by shear in Column " + str(EleTag))
     elif 2. * Vc < Vs <= 4. * Vc:
-        se_1 = min(h / 4, b / 2)
-    elif Vs <= 2. * Vc:
         se_1 = min(h / 2, b / 2)
+    elif Vs <= 2. * Vc:
+        se_1 = min(h, b)
     Ave = Ash_B  # area transversal del estribo
     if Vs <= 0.:
         se = se_1

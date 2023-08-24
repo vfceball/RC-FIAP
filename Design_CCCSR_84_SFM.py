@@ -68,9 +68,9 @@ def beta1(fc):
 
 # Design load combinations
 def Combo_ACI(DL, LL, E):
-    U1 = 1.2 * DL + 1.6 * LL
-    U2 = 1.2 * DL + 1.0 * LL + 1.0 * E
-    U3 = 1.2 * DL + 1.0 * LL - 1.0 * E
+    U1 = 1.4 * DL + 1.7 * LL
+    U2 = 1.05 * DL + 1.28 * LL + 1.0 * E
+    U3 = 1.05 * DL + 1.28 * LL - 1.0 * E
     U4 = 0.9 * DL + 1.0 * E
     U5 = 0.9 * DL - 1.0 * E
     return U1, U2, U3, U4, U5
@@ -107,19 +107,17 @@ def AsBeam(Mu, EleTag, cover, ro_min_b, ro_max_b, dst, fy, BBeam, HBeam):
     return As_con, d, Mn, db, Mpr, nb
 
 # Shear beams design
-def AvBeam(Vu, db, d, EleTag, fys, dst, Ast, BBeam):
-    Vc = 0.17 * sqrt(fcB / 1000.) * MPa * BBeam * d
-    Vs = (Vu - 0.75 * Vc) / 0.75
-    if Vs > 4. * Vc:
+def AvBeam(Vu, db, d, EleTag, fys, dst, Ast, BBeam, nb, Vc):
+    Vc1 = 0.53 * sqrt(fcB * kgf/cm**2) * BBeam * d
+    Vs = (Vu - 0.85 * Vc) / 0.85
+    if Vs > 4. * Vc1:
         print("reshape by shear in Beam " + str(EleTag))
-    elif 2. * Vc < Vs <= 4. * Vc:
-        se_1 = d / 4
-    elif Vs <= 2. * Vc:
-        se_1 = d / 2
-    nr_v = np.array([2, 3, 4])  # vector de numero de ramas
+    se_1 = min(d / 4., 8. * db, 24 * dst, 300. * mm)
+    nr_v = np.array([2, 3, 4, 5, 6])  # vector de numero de ramas
     if Vs <= 0.:
         se = se_1
-        nra = 2.
+        se_2 = 2 * se_1
+        nra = 2
     else:
         for nra in nr_v:
             Ave = Ast * nra  # area transversal del estribo
@@ -128,17 +126,17 @@ def AvBeam(Vu, db, d, EleTag, fys, dst, Ast, BBeam):
             if se >= 60. * mm:
                 break
     se = floor(se / cm) * cm
-    # nra1 = ceil((BBeam - 2 * cover)/(15*cm))
-    nra1 = 2
+    nra1 = ceil((BBeam - 2 * cover)/(15*cm))
     nra = max(nra, nra1)
+    sem = min(2*se, se_2)
     if se < 60. * mm:
         print("Stirrup spacing is less than 6 cm in beam " + str(EleTag))
-    return nra, se
+    return nra, se, sem
 
 # Colmuns P-M design
 def AsColumn(b, h, EleTag, cover, dst, fy, Beta1C, Pu_v, Mu_v, Sum_Mn_B, FactorColBeamStr, ncolsn, Nu_min):
     ro_min = 0.01
-    ro_max = 0.08
+    ro_max = 0.06
     npts = 20
     ncom = 10
     ecu = 0.003
@@ -172,10 +170,9 @@ def AsColumn(b, h, EleTag, cover, dst, fy, Beta1C, Pu_v, Mu_v, Sum_Mn_B, FactorC
                         Mconc = Pconc * (h - a) / 2.
                         et = ecu * (d - c) / c
                         fiv = np.copy(et)
-                        fiv = np.where(fiv >= 0.005, 0.9, fiv)
-                        fiv = np.where(fiv <= 0.002, 0.65, fiv)
-                        fiv = np.where((fiv > 0.002) & (fiv < 0.005), (0.65 + 0.25 * (fiv - 0.002) / 0.003),
-                                       fiv)
+                        fiv = np.where(fiv >= 0.005, 0.90, fiv)
+                        fiv = np.where(fiv <= 0.002, 0.70, fiv)
+                        fiv = np.where((fiv > 0.002) & (fiv < 0.005), (0.70 + 0.25 * (fiv - 0.002) / 0.003), fiv)
                         c = c[:, np.newaxis]
                         es = ecu * (c - dist) / c
                         fs = Es * es
@@ -186,7 +183,7 @@ def AsColumn(b, h, EleTag, cover, dst, fy, Beta1C, Pu_v, Mu_v, Sum_Mn_B, FactorC
                         Pn = np.hstack(
                             [Tn_max, np.where(Pconc + Pacer > Pn_max, Pn_max, Pconc + Pacer), Pn_max])
                         Mn = np.hstack([0, Mconc + Macer, 0])
-                        fiv = np.hstack([0.9, fiv, 0.65])
+                        fiv = np.hstack([0.9, fiv, 0.70])
                         fiPn = fiv * Pn
                         fiMn = fiv * Mn
 
@@ -214,6 +211,7 @@ def AsColumn(b, h, EleTag, cover, dst, fy, Beta1C, Pu_v, Mu_v, Sum_Mn_B, FactorC
                                 if np.all(Mu_i >= Mu_v) == True and Col_to_beam_str_ratio >= FactorColBeamStr:
                                     verif = True
                                     break
+
                 if verif == True:
                     break
             if verif == True:
@@ -226,7 +224,7 @@ def AsColumn(b, h, EleTag, cover, dst, fy, Beta1C, Pu_v, Mu_v, Sum_Mn_B, FactorC
 # Walls P-M design
 def AsWall(b, h, EleTag, cover, fy, Beta1C, Pu_v, Mu_v, Nu_min, PS, ro_min):
     # ro_min = 0.0015
-    ro_max = 0.08
+    ro_max = 0.06
     dst = 3 / 8 * inch
     sl = np.arange(0.45, 0.05, -0.05)
     npts = 20
@@ -267,8 +265,8 @@ def AsWall(b, h, EleTag, cover, fy, Beta1C, Pu_v, Mu_v, Nu_min, PS, ro_min):
                     et = ecu * (d - c) / c
                     fiv = np.copy(et)
                     fiv = np.where(fiv >= 0.005, 0.9, fiv)
-                    fiv = np.where(fiv <= 0.002, 0.65, fiv)
-                    fiv = np.where((fiv > 0.002) & (fiv < 0.005), (0.65 + 0.25 * (fiv - 0.002) / 0.003), fiv)
+                    fiv = np.where(fiv <= 0.002, 0.7, fiv)
+                    fiv = np.where((fiv > 0.002) & (fiv < 0.005), (0.7 + 0.25 * (fiv - 0.002) / 0.003), fiv)
                     c = c[:, np.newaxis]
                     es = ecu * (c - dist) / c
                     fs = Es * es
@@ -278,7 +276,7 @@ def AsWall(b, h, EleTag, cover, fy, Beta1C, Pu_v, Mu_v, Nu_min, PS, ro_min):
                     Macer = np.sum(fs * As * (h / 2. - dist), axis=1)
                     Pn = np.hstack([Tn_max, np.where(Pconc + Pacer > Pn_max, Pn_max, Pconc + Pacer), Pn_max])
                     Mn = np.hstack([0, Mconc + Macer, 0])
-                    fiv = np.hstack([0.9, fiv, 0.65])
+                    fiv = np.hstack([0.9, fiv, 0.7])
                     cv = np.hstack([0, cv, 1e15])
                     fiPn = fiv * Pn
                     fiMn = fiv * Mn
@@ -301,63 +299,78 @@ def AsWall(b, h, EleTag, cover, fy, Beta1C, Pu_v, Mu_v, Nu_min, PS, ro_min):
 
 
 # Shear columns design
-def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys):
-    fiv = 0.75
-    Ag = b * h
-    dp = cover + dst + db / 2
-    d, dbc = h - dp, b - dp
-    neH = floor(nbH / 2) + 1
-    neB = floor(nbB / 2) + 1
-
-    Ash_H = neH * Ast
-    Ash_B = neB * Ast
-
-    Vc = min((0.17 * sqrt(fcC * MPa) + min(Nu_min / 6 / Ag, 0.05 * fcC)) * b * d, 0.42 * sqrt(fcC * MPa) * b * d)
-    Vs = (Vu - fiv * Vc) / fiv
-    if Vs > 4. * Vc:
-        print("reshape by shear in Column " + str(EleTag))
-    elif 2. * Vc < Vs <= 4. * Vc:
-        se_1 = min(h / 4, b / 2)
-    elif Vs <= 2. * Vc:
-        se_1 = min(h / 2, b / 2)
-    Ave = Ash_B  # area transversal del estribo
-    if Vs <= 0.:
-        se = se_1
-    else:
-        se_2 = Ave * fys * d / Vs
-        se = min([se_1, se_2])
-    if se < 60. * mm:
-        print('Minimum spacing of stirrups is not met in column ' + str(EleTag))
-    Vn = Vc + Ave * fys * d / se
-    return se, neB, neH, Vn
-
-
-def AvWall(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys, ro, cover):
-    hw = Loc_heigth[-1]
-    fiv = 0.75
+def AvColumn(EleTag, Vu, b, h, nbH, nbB, dst, Vc, db, fys, Nu_min, Vc1):
+    fiv = 0.85
     Ag = b * h
     dp = cover + dst + db / 2
     d = h - dp
-    if hw / h <= 1.5:
+    neH_v = np.arange(floor(nbH / 2) + 1, nbH+1)
+    neB_v = np.arange(floor(nbB / 2) + 1, nbB+1)
+    bc1, bc2 = h - 2*cover, b - 2*cover
+    de_v = np.array([3, 4, 5])
+    for nde in de_v:
+        de = nde / 8. * inch
+        Ast = pi * de ** 2. / 4.
+        for neB in neB_v:
+            for neH in neH_v:
+                Ash_H = neH * Ast
+                Ash_B = neB * Ast
+                se_1 = min(Ash_H / bc1 / (0.25 * (Ag / (bc1 * bc2) - 1) * fcC / fys),
+                           Ash_B / bc2 / (0.25 * (Ag / (bc1 * bc2) - 1) * fcC / fys),
+                           Ash_H / bc1 / (0.10 * fcC / fys),
+                           Ash_B / bc2 / (0.10 * fcC / fys))
+                if nde >= 4 and se_1 <= 10*cm and fys >= 420 * MPa:
+                    se_1 = 10*cm
+                    de = 1 / 2. * inch
+                    neH = ceil(bc1/(20*cm))
+                    neB = ceil(bc2/(20*cm))
+                    Ash_H = neH * Ast
+                    Ash_B = neB * Ast
+                Vs = (Vu - fiv * Vc) / fiv
+                se_1 = min(se_1, h/4, b/4)
+                if Vs <= 1 / 3 * sqrt(fcC * MPa) * b * d:
+                    se_1 = se_1
+                elif Vs >= 1 / 3 * sqrt(fcC * MPa) * b * d:
+                    se_1 = min(se_1, h / 4)
+                if Vu > fiv * (Vc1 + (0.66 * sqrt(fcC * MPa)) * b * d):
+                    print('Resize the column' + str(EleTag) + ' by shear ')
+                Ave = Ash_B  # area transversal del estribo
+                if Vs <= 0.:
+                    se = se_1
+                    se_2 = 2*se_1
+                else:
+                    se_2 = Ave * fys * d / Vs
+                    se = min([se_1, se_2])
+                if se >= 80.*mm:
+                    break
+            if se >= 80.*mm:
+                break
+        if se >= 80.*mm:
+            break
+    Vn = Vc + Ave*fys*d/se
+    sem = min(2*se, se_2, b/2)
+    return se, neB, neH, Vn, de, sem
+
+def AvWall(EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys, ro, cover):
+    hw = Loc_heigth[-1]
+    fiv = 0.85
+    Ag = b * h
+    dp = cover + dst + db / 2
+    d = h - dp
+    if hw / h <= 1.0:
         alfa_c = 0.25
     elif hw / h >= 2.0:
         alfa_c = 0.17
     else:
-        alfa_c = np.interp(hw / h, [1.5, 2.0], [0.25, 0.17])
+        alfa_c = np.interp(hw / h, [1.0, 2.0], [0.25, 0.17])
     Vc = (alfa_c * sqrt(fcC * MPa)) * Ag
     Vs = (Vu - fiv * Vc) / fiv
     Ave = 2 * Ast  # area transversal del estribo
     se_1 = Ave * fys * h / Vs
-    ro_t = h / se_1 * Ave / Ag
-    if Vu <= 0.04 * fiv * alfa_c * sqrt(fcC * MPa):
-        ro_t = max(0.0020, ro_t)
-        se = h / (ro_t * Ag / Ave)
-        ro_l = ro
-    else:
-        ro_t = max(0.0025, ro_t)
-        se = h / (ro_t * Ag / Ave)
-        ro_l = max(0.0025 + 0.5 * (2.5 - hw / h) * (ro_t - 0.0025), 0.0025, ro)
-        nbH = ceil(ro_l * Ag / (pi * db ** 2 / 4) / 2)
+    ro_t = max(h / se_1 * Ave / Ag, 0.0020)
+    se = h / (ro_t * Ag / Ave)
+    ro_l = ro
+    nbH = ceil(ro_l * Ag / (pi * db ** 2 / 4) / 2)
     Vn = Vc + Ave * fys * d / se
     if Vn > 0.66 * sqrt(fcC * MPa) * Ag:
         print('Wall ' + str(EleTag) + 'needs to be resized by shear limit')
@@ -376,7 +389,7 @@ LL = float(self.ui.LL.text())
 HColi = float(self.ui.HColi.text())  # Column inside Depth
 BColi = float(self.ui.BColi.text()) * FN  # Column inside Width
 HCole = float(self.ui.HCole.text())  # Column outside Depth
-BCole = float(self.ui.BCole.text()) * FN # Column outside Width
+BCole = float(self.ui.BCole.text()) * FN  # Column outside Width
 HBeam = float(self.ui.HBeam.text())
 BBeam = float(self.ui.BBeam.text()) * FN
 tw1, tw2 = float(self.ui.tw1.text()), float(self.ui.tw2.text())
@@ -866,10 +879,10 @@ elif SeismicLoadCode == 'Weight Percentage':
 elif SeismicLoadCode == 'Spectra file':
     SpecFile = self.ui.SpectraFile.text()
     Spec = np.loadtxt('Spectra/' + SpecFile + '.txt')
-    Ct = 0.0466
-    x = 0.9
+    Ct = 0.08
+    x = 3 / 4
     if tw1 != 0 or tw2 != 0:
-        Ct, x = 0.0488, 0.75
+        Ct, x = 0.05, 3 / 4
     Ta = Ct * Htotal ** x
     print('Ta =', Ta)
     Cu = 1.2
@@ -979,13 +992,17 @@ cover = 4 * cm
 coverW = 2 * cm
 dst = 3 / 8 * inch
 Ast = pi * dst ** 2 / 4.  # area de la barra del estribo
-ro_max_b = 0.85 * Beta1B * fcB * 3. / fy / 8.  # maximun steel percentage
+ro_max_b = min(0.85 * Beta1B * fcB * 3. / fy / 8., 0.025)  # maximun steel percentage
 ro_min_b = max(0.25 * sqrt(fcB / MPa) * MPa / fy, 1.4 * MPa / fy)  # minimun steel percentage
 DataBeamDesign = []
 nprog = 0
 nelems = num_elems - 1
+# print('num_beams', num_beams)
+# QApplication.processEvents()
 for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, ElemnsForceDL, ElemnsForceDLE):
+    # self.ui.progressBarBeamDesign.setValue(int(100 * nprog / num_elems))
     self.ui.progressBarBeamDesign.setValue(int(100 * nprog / num_beams))
+    # QApplication.processEvents()
     nprog = nprog + 1
     if Ele.EleTag in ListEleTagBeams:
         b, h = Ele.BEle, Ele.HEle
@@ -1006,57 +1023,72 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         # print('MID ', MID, 'MED', MED, 'MIL ', MIL, 'MEL', MEL, 'MIE ', MIE, 'MEE', MEE)
         MI1, MI2, MI3, MI4, MI5 = Combo_ACI(MID, MIL, MIE)
         MNU1 = max([MI1, MI2, MI3, MI4, MI5, 0.])  # Negative initial design node moment
-        MPU1 = min([MI1, MI2, MI3, MI4, MI5, -abs(MNU1) / 4])  # Positive initial design node momentum
+        MPU1 = min([MI1, MI2, MI3, MI4, MI5, -abs(MNU1) / 2])  # Positive initial design node momentum
         ME1, ME2, ME3, ME4, ME5 = Combo_ACI(MED, MEL, MEE)
         MNU2 = max([ME1, ME2, ME3, ME4, ME5, 0.])  # Negative moment final design
-        MPU2 = min([ME1, ME2, ME3, ME4, ME5, -abs(MNU2) / 4])  # Positive moment final design
+        MPU2 = min([ME1, ME2, ME3, ME4, ME5, -abs(MNU2) / 2])  # Positive moment final design
         Mmax = max([MNU1, -MPU1, MNU2, -MPU2])
-        # MNU1 = max([MNU1, Mmax / 5])
-        # MPU1 = min([MPU1, -Mmax / 5])
-        # MNU2 = max([MNU2, Mmax / 5])
-        # MPU2 = min([MPU2, -Mmax / 5])
+        MNU1 = max([MNU1, Mmax / 4])
+        MPU1 = min([MPU1, -Mmax / 4])
+        MNU2 = max([MNU2, Mmax / 4])
+        MPU2 = min([MPU2, -Mmax / 4])
+
         # print('MNU1 ', MNU1, 'MPU1', MPU1, 'MNU2 ', MNU2, 'MPU2', MPU2)
         Ast1, dt1, Mn_N1, db_t1, Mpr_N1, nbt1 = AsBeam(MNU1, Ele.EleTag, cover, ro_min_b, ro_max_b, dst, fy, b, h)
         Asb1, db1, Mn_P1, db_b1, Mpr_P1, nbb1 = AsBeam(-MPU1, Ele.EleTag, cover, ro_min_b, ro_max_b, dst, fy, b, h)
         Ast2, dt2, Mn_N2, db_t2, Mpr_N2, nbt2 = AsBeam(MNU2, Ele.EleTag, cover, ro_min_b, ro_max_b, dst, fy, b, h)
         Asb2, db2, Mn_P2, db_b2, Mpr_P2, nbb2 = AsBeam(-MPU2, Ele.EleTag, cover, ro_min_b, ro_max_b, dst, fy, b, h)
-        # print(Ele.EleTag, 'Mn_N1 ', Mn_N1, 'Mn_P1', Mn_P1, 'Mn_N2 ', Mn_N2, 'Mn_P2', Mn_P2)
-        # print(Ele.EleTag, 'Mpr_N1 ', Mpr_N1, 'Mpr_P1', Mpr_P1, 'Mpr_N2 ', Mpr_N2, 'Mpr_P2', Mpr_P2)
 
-        VI1, VI2, VI3, VI4, VI5 = Combo_ACI(VID, VIL, VIE)
-        VI6 = abs(-(Mn_P1 + Mn_N2) / Ele.LEle + ((1.2 + 0.2 * Sds) * WDL + 1.0 * WLL)/FN * Ele.LEle / 2.)
-        VI7 = (Mn_N1 + Mn_P2) / Ele.LEle + ((1.2 + 0.2 * Sds) * WDL + 1.0 * WLL)/FN * Ele.LEle / 2.
-        VI8 = 1.2 * VID + 1.0 * VIL - Omo * VIE
-        VI9 = 0.9 * VID - Omo * VIE
+        VI1 = 1.4 * VID + 1.7 * VIL
+        VI2 = 1.05 * VID + 1.28 * VIL - 1.0 * VIE
+        VI3 = 0.9 * VID - 1.0 * VIE
+        VI4 = abs(-(Mn_P1 + Mn_N2) / Ele.LEle + (1.05 * WDL + 1.28 * WLL)/FN * Ele.LEle / 2.)
+        VI5 = (Mn_N1 + Mn_P2) / Ele.LEle + (1.05 * WDL + 1.28 * WLL)/FN * Ele.LEle / 2.
 
-        VU1a = np.max(np.abs([VI1, VI2, VI3, VI4, VI5]))
-        VU1b = max(VI6, VI7)
-        VU1c = max(VI8, VI9)
+        VI6 = 1.05 * VID + 1.28 * VIL - 2 * VIE
+        VI7 = 0.9 * VID - 2 * VIE
 
-        # VU1 = max(VU1a, min(VU1b, VU1c))  # Cortante negativo nudo inicial de diseño
-        VU1 = VU1a
+        VU1 = max(VI1, VI2, VI3, VI4, VI5)  # Negative shear node final design
 
-        VE1, VE2, VE3, VE4, VE5 = Combo_ACI(VED, VEL, VEE)
+        VE1 = 1.4 * VED + 1.7 * VEL
+        VE2 = 1.05 * VED + 1.28 * VEL + 1.0 * VEE
+        VE3 = 0.9 * VED + 1.0 * VEE
+        VE4 = (Mn_P1 + Mn_N2) / Ele.LEle + (1.05 * WDL + 1.28 * WLL) / FN * Ele.LEle / 2.
+        VE5 = abs(-(Mn_N1 + Mn_P2) / Ele.LEle + (1.05 * WDL + 1.28 * WLL) / FN * Ele.LEle / 2.)
 
-        VE6 = abs(-(Mn_P1 + Mn_N2) / Ele.LEle + ((1.2 + 0.2 * Sds) * WDL + 1.0 * WLL)/FN * Ele.LEle / 2.)
-        VE7 = (Mn_N1 + Mn_P2) / Ele.LEle + ((1.2 + 0.2 * Sds) * WDL + 1.0 * WLL)/FN * Ele.LEle / 2.
-        VE8 = 1.2 * VED + 1.0 * VEL - Omo * VEE
-        VE9 = 0.9 * VED - Omo * VEE
-
-        VU2a = np.max(np.abs([VE1, VE2, VE3, VE4, VE5]))
-        VU2b = max(VE6, VE7)
-        VU2c = max(VE8, VE9)
-
-        # VU2 = max(VU2a, min(VU2b, VU2c))  # Negative shear node final design
-        VU2 = VU2a
+        VE6 = 1.05 * VED + 1.28 * VEL + 2 * VEE
+        VE7 = 0.9 * VED + 2 * VEE
+        VU2 = max(VE1, VE2, VE3, VE4, VE5)  # Negative shear node final design
 
         Vpr_1 = (Mpr_P1 + Mpr_N2) / Ele.LEle + (1.2 * WDL + WLL)/FN * Ele.LEle / 2.
         Vpr_2 = (Mpr_N1 + Mpr_P2) / Ele.LEle + (1.2 * WDL + WLL)/FN * Ele.LEle / 2.
         Vpr = max(Vpr_1, Vpr_2)
-        Vun = VU2b
+        Vun = Vpr
 
-        nst1, sst1 = AvBeam(VU1, db_t1, dt1, Ele.EleTag, fys, dst, Ast, b)
-        nst2, sst2 = AvBeam(VU2, db_t2, dt2, Ele.EleTag, fys, dst, Ast, b)
+        nb1 = max(nbt1, nbb1)
+        nb2 = max(nbt2, nbb2)
+
+        PID = EleForceD[2]/FN
+        PIL = EleForceDL[2]/FN - PID
+        PIE = EleForceDLE[2]/FN - PID - PIL
+        PED = -EleForceD[5]/FN
+        PEL = -EleForceDL[5]/FN - PED
+        PEE = -EleForceDLE[5]/FN - PED - PEL
+        PI1, PI2, PI3, PI4, PI5 = Combo_ACI(PID, PIL, PIE)
+        PE1, PE2, PE3, PE4, PE5 = Combo_ACI(PED, PEL, PEE)
+        PU1 = min(PI2, PI3, PI4, PI5)
+        PU2 = min(PE2, PE3, PE4, PE5)
+        if max(VI4, VI5) >= 0.5*VU1 and PU1 < b*h*fcB/20:
+            Vc1 = 0
+        else:
+            Vc1 = 0.17 * sqrt(fcB / 1000.) * MPa * b * dt1
+        if max(VE4, VE5) >= 0.5*VU2 and PU2 < b*h*fcB/20:
+            Vc2 = 0
+        else:
+            Vc2 = 0.17 * sqrt(fcB / 1000.) * MPa * b * dt2
+
+        nst1, sst1, sem1 = AvBeam(VU1, db_t1, dt1, Ele.EleTag, fys, dst, Ast, b, nb1, Vc1)
+        nst2, sst2, sem2 = AvBeam(VU2, db_t2, dt2, Ele.EleTag, fys, dst, Ast, b, nb2, Vc2)
 
         DataBeamDesign.append(BeamDesign(Ele.EleTag, b, h, Ast1, dt1, Mn_N1, Asb1, db1, Mn_P1, nst1,
                                          sst1, Ast2, dt2, Mn_N2, Asb2, db2, Mn_P2, nst2, sst2, Ele.Nod_ini,
@@ -1066,8 +1098,10 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         data_beams_table(self)
 self.ui.progressBarBeamDesign.reset()
 self.ui.progressBarBeamDesign.hide()
+# self.QProgressBar.reset()
 
 # Column design procedure
+
 self.ui.progressBarBeamDesign.show()
 # self.ui.progressBarBeamDesign.setValue(50)
 self.ui.progressBarBeamDesign.setFormat('designing columns . . .')
@@ -1076,10 +1110,14 @@ Beta1C = beta1(fcC)
 DataColDesign = []
 DataWallDesign = []
 nprog = 0
+# print('num_cols', num_cols)
+# QApplication.processEvents()
 for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, ElemnsForceDL, ElemnsForceDLE):
+    # self.ui.progressBarColumnDesign.setValue(float(100 * nprog / num_elems))
     self.ui.progressBarBeamDesign.setValue(int(100 * nprog / num_cols))
     nprog = nprog + 1
     if Ele.EleTag in ListEleTagCols:
+        # QApplication.processEvents()
         if ListNodes[Ele.Nod_end, 2] == Loc_heigth[-1]:
             ncolsn = 1
         else:
@@ -1122,7 +1160,7 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         PE1, PE2, PE3, PE4, PE5 = Combo_ACI(PED, PEL, PEE)
 
         Nu_min = min([PI2, PI3, PI4, PI5, PE2, PE3, PE4, PE5])
-        PS = np.array([PI2, PI3, PI4, PI5, PE2, PE3, PE4, PE5])
+
         Pu_v = np.array([PI1, PI2, PI3, PI4, PI5, PE1, PE2, PE3, PE4, PE5])
         Mu_v = np.array([MI1, MI2, MI3, MI4, MI5, ME1, ME2, ME3, ME4, ME5])
         Mu_v = np.absolute(Mu_v)
@@ -1144,26 +1182,22 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         Mpr_max = np.max(Mpr_is)  # Maximum moment probable of all seismic combo
 
         VI1, VI2, VI3, VI4, VI5 = Combo_ACI(VID, VIL, VIE)
-
-        VI6 = 2.0 * Mn_max / Ele.LEle
-        VI7 = 1.2 * VID + 1.0 * VIL + Omo * VIE
-        VI8 = 1.2 * VID + 1.0 * VIL - Omo * VIE
-        VI9 = 0.9 * VID + Omo * VIE
-        VI10 = 0.9 * VID - Omo * VIE
-
-        VUa = max([VI1, VI2, VI3, VI4, VI5])
-        VUb = VI6
-        VUc = max([VI7, VI8, VI9, VI10])
-
-        if Ele.LEle <= 5 * h:
-            Vu = max([VUa, min([VUb, VUc])])  # Cortante maximo de diseño
+        VI6 = min(2.0 * Mpr_max / Ele.LEle, (Sum_Mpr_B + (Vpr_R + Vpr_L) * h / 2) / Ele.LEle)
+        Vu = max([VI1, VI2, VI3, VI4, VI5, VI6])
+        Vc1 = min((0.17 * sqrt(fcC * MPa) + min(Nu_min / 6 / Ele.AEle, 0.05 * fcC)) * b * d,
+                  0.42 * sqrt(fcC * MPa) * b * d)
+        if VI6 >= 0.5*Vu and Nu_min < b*h*fcB/20:
+            Vc = 0
         else:
-            Vu = VUa
+            dp = cover + dst + db / 2
+            d = h - dp
+            Vc = Vc1
 
-        sst, nsB, nsH, Vn = AvColumn(Ele.EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys)
+        # print('Vu =', Vu, 'Vc =', Vc, 'Nu_min', Nu_min, 'Ele.EleTag', Ele.EleTag)
+
+        sst, nsB, nsH, Vn, de, sem = AvColumn(Ele.EleTag, Vu, b, h, nbH, nbB, dst, Vc, db, fys, Nu_min, Vc1)
         NUG1 = abs(PID + 0.25 * PIL)
         NUG2 = abs(PED + 0.25 * PEL)
-        NUGA = (NUG1 + NUG2) / 2
         NUD1 = abs(PID + 0.25 * PIL + PIE)
         NUD2 = abs(PED + 0.25 * PEL + PEE)
         MUD1 = abs(MID + 0.25 * MIL + MIE)
@@ -1176,32 +1210,19 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
             knl = 0.7
         else:
             knl = np.interp(Cd, [2.0, 6.0], [1.0, 0.7])
-        # knl = 1.0
-        sem = sst
         if sem / d <= 0.75:
             alfa_col = 1.0
         elif sem / d >= 1.0:
             alfa_col = 0.0
         else:
             alfa_col = np.interp(sem / d, [0.75, 1.0], [1.0, 0.0])
-        alfa_col = 1
         ro_t = min(max(0.075, Ast * nsB / (b * d)), 0.0175)
         yi = ListNodes[Ele.Nod_ini, 2]
         ye = ListNodes[Ele.Nod_end, 2]
         LCol = ye - yi
-        # Linf = Ele.LEle/2
-        VnCol = knl * (alfa_col * Ast * nsB * fy * d / sst +
-                        0.5 * sqrt(fcC * MPa) / (min(max(2, MUD1 / (VUD1 * d)), 4)) *
-                        sqrt(1 + NUGA / (0.5 * b * h * sqrt(fcC * MPa))) * 0.8 * b * h)
-        # VnCol = knl * (alfa_col * Ast * nsB * fy * d / sst +
-        #                 0.5 * sqrt(fcC * MPa) / (min(max(2, Linf / d), 4)) *
-        #                 sqrt(1 + NUGA / (0.5 * b * h * sqrt(fcC * MPa))) * 0.8 * b * h)
-
-        # VnCol_VnCode = VnCol / Vn
-        # Vn_Aeff_fc = 12*(VnCol/(b * d))/fcC
-        # print('VnCol_VnCode = ', VnCol_VnCode)
-        # print('Vn_Aeff_fc = ', Vn_Aeff_fc)
-
+        VnCol = knl * (alfa_col * Ast * nsB * fy * d / sem +
+                        0.5 * sqrt(fcC * MPa) / (min(max(2, MUD1 / VUD1), 4) * d) *
+                        sqrt(1 + NUD1 / (0.5 * b * h * sqrt(fcC * MPa))) * 0.8 * b * h)
         Vupr = min(2.0 * Mpr_max / Ele.LEle, Sum_Mpr_B)
 
         Vu_Vn = Vupr / VnCol
@@ -1219,7 +1240,6 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
     self.ui.tabWidget.setCurrentIndex(1)
 self.ui.progressBarBeamDesign.reset()
 self.ui.progressBarBeamDesign.hide()
-self.ui.progressBarBeamDesign.show()
 # self.ui.progressBarBeamDesign.setValue(50)
 nprog = 0
 if tw1 != 0 or tw2 != 0:
@@ -1228,12 +1248,14 @@ if tw1 != 0 or tw2 != 0:
     self.ui.progressBarBeamDesign.setStyleSheet('text-align: center')
 RFD = self.ui.Factor_red_steel_Wall.value()
 for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, ElemnsForceDL, ElemnsForceDLE):
+    # self.ui.progressBarBeamDesign.setValue(int(100 * nprog / num_elems))
     if Ele.EleTag in ListEleTagW1 or Ele.EleTag in ListEleTagW2:
         if tw1 != 0 and Ele.EleTag == ListEleTagW1[0]:
             ro_min = 0.0015
         if tw2 != 0 and Ele.EleTag == ListEleTagW2[0]:
             ro_min = 0.0015
         self.ui.progressBarBeamDesign.setValue(int(100 * nprog / num_walls))
+        # QApplication.processEvents()
         nprog = nprog + 1
         b, h = Ele.BEle, Ele.HEle
         MID = EleForceD[3]
@@ -1262,7 +1284,7 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         PS, MS = np.absolute(PS), np.absolute(MS)
         nbH, nbB, db, As, fiPn, fiMn, Mn_i, d, dist, ro, Mu_i, cMaxS = AsWall(b, h, Ele.EleTag, coverW, fy, Beta1C,
                                                                               Pu_v, Mu_v, Nu_min, PS, ro_min)
-        ro_min = max(RFD*ro, 0.0015)
+        ro_min = max(RFD*ro, 0.0020)
         # print('Mn_i =', Mn_i)
         VID = EleForceD[1]
         VIL = EleForceDL[1] - VID
@@ -1272,22 +1294,15 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         Mn_is = Mn_i[[1, 2, 3, 4, 6, 7, 8, 9]]
         Mn_max = np.max(Mn_is)  # Maximum moment of all seismic combo
         VI1, VI2, VI3, VI4, VI5 = Combo_ACI(VID, VIL, VIE)
-
         VI6 = 2.0 * Mn_max / Ele.LEle
         VI7 = 1.2 * VID + 1.0 * VIL + Omo * VIE
         VI8 = 1.2 * VID + 1.0 * VIL - Omo * VIE
         VI9 = 0.9 * VID + Omo * VIE
         VI10 = 0.9 * VID - Omo * VIE
-
         VUa = max([VI1, VI2, VI3, VI4, VI5])
         VUb = VI6
         VUc = max([VI7, VI8, VI9, VI10])
-
-        if Ele.LEle <= 5 * h:
-            Vu = max([VUa, min([VUb, VUc])])  # Cortante maximo de diseño
-        else:
-            Vu = VUa
-
+        Vu = VUa  # Cortante maximo de diseño
         sst, Vn, nbH, ro_t, ro_l = AvWall(Ele.EleTag, Vu, b, h, nbH, nbB, dst, Ast, Nu_min, db, fys, ro, coverW)
         NUG1 = abs(PID + 0.25 * PIL)
         NUG2 = abs(PED + 0.25 * PEL)
@@ -1323,10 +1338,9 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
         elif WallDetailing == 'SMF':
             if sigma_c >= 0.2*fcC:
                 BE = 'Yes'
-                so = max(100 * mm, min(100 * mm + (350 * mm - hx) / 3, 150 * mm))
-                se_1 = min(6. * db, b / 3., so)  # minimum spacing c.18.7.5.3 ACI-19
+                se_1 = min(6. * db, b / 3.)  # minimum spacing c.18.7.5.3 ACI-19
                 se_2 = min(Ash_H / bc1 / (0.09 * fcC / fys), Ash_B / bc2 / (0.09 * fcC / fys))
-                se_BE = min([se_1, se_2, so])
+                se_BE = min([se_1, se_2])
             else:
                 BE = 'NO'
                 se_BE = sst
@@ -1339,6 +1353,8 @@ for (Ele, EleForceD, EleForceDL, EleForceDLE) in zip(Elements, ElemnsForceD, Ele
     self.ui.tabWidget.setCurrentIndex(1)
 self.ui.progressBarBeamDesign.reset()
 self.ui.progressBarBeamDesign.hide()
+# self.ui.progressBarBeamDesign.reset()
+
 
 # Frame Geometry plot
 fig = self.ui.DataFrame.canvas.axes
@@ -1469,31 +1485,6 @@ for Ele in Elements:
         # plt.gca().add_patch(plt.Polygon(np.c_[lat, long], facecolor='red', edgecolor="blue"))
         # plt.gca().autoscale()
         # plt.show()
-
-        #     xiW2, yiW2 = ListNodesW2[Ele.Nod_ini, 1] + 2 + lw1 + 2, ListNodesW2[Ele.Nod_ini, 2]
-        #     hW2 = ListNodesW2[Ele.Nod_end, 2] - ListNodesW2[Ele.Nod_ini, 2]
-        #     ax.Rectangle((xiW2, yiW2), lw2, hW2, ec="black", facecolor="black", alpha=0.1)
-        #
-        #     ax.plot(ListNodesW1[:, 1] + 2 + 20 * Desp_xW1[:, -1], ListNodesW1[:, 2] + 5 * Desp_yW1[:, -1], 's',
-        #             color='red', alpha=0.5)
-        #     ax.plot(ListNodesW1[:, 1] + 2 + lw1 + 20 * Desp_xW1[:, -1], ListNodesW1[:, 2] + 5 * Desp_yW1[:, -1], 's',
-        #             color='red', alpha=0.5)
-        #     ax.plot(ListNodesW2[:, 1] + 2 + lw1 + 2 + 20 * Desp_xW2[:, -1], ListNodesW2[:, 2] + 5 * Desp_yW2[:, -1],
-        #             's', color='red', alpha=0.5)
-        #     ax.plot(ListNodesW2[:, 1] + 2 + lw1 + 2 + lw2 + 20 * Desp_xW2[:, -1],
-        #             ListNodesW2[:, 2] + 5 * Desp_yW2[:, -1], 's', color='red', alpha=0.5)
-        # elif tw1 != 0 and tw2 == 0:
-        #     ax.plot(ListNodesW1[:, 1] + 2 + 20 * Desp_xW1[:, -1], ListNodesW1[:, 2] + 5 * Desp_yW1[:, -1], 's',
-        #             color='red', alpha=0.5)
-        #     ax.plot(ListNodesW1[:, 1] + 2 + lw1 + 20 * Desp_xW1[:, -1], ListNodesW1[:, 2] + 5 * Desp_yW1[:, -1], 's',
-        #             color='red', alpha=0.5)
-        # elif tw1 == 0 and tw2 != 0:
-        #     ax.plot(ListNodesW2[:, 1] + 2 + 20 * Desp_xW2[:, -1], ListNodesW2[:, 2] + 5 * Desp_yW2[:, -1], 's',
-        #             color='red', alpha=0.5)
-        #     ax.plot(ListNodesW2[:, 1] + 2 + lw2 + 20 * Desp_xW2[:, -1], ListNodesW2[:, 2] + 5 * Desp_yW2[:, -1], 's',
-        #             color='red', alpha=0.5)
-        #
-        # ax.Rectangle((left, bottom), width, height, ec="balck", facecolor="black", alpha=0.1)
 
 for DC in DataColDesign:
     xi = ListNodes[DC.Nod_ini, 1]

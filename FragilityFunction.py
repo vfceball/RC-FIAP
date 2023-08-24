@@ -3,6 +3,22 @@ import numpy as np  # load the numpy module, calling it np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 
+def fn_sse_pc(IMo, num_gms, num_collapse):
+    from scipy.optimize import fmin
+
+    def ssefit(x, num_gms, num_collapse, IMo):
+        if x[0] < 0:
+            x[0] = 0
+        p = norm.cdf(np.log(IMo), np.log(x[0]), x[1])
+        sse = np.sum((p - num_collapse/num_gms)**2)
+        return sse
+
+    x0 = np.array([0.8, 0.4])
+    x = fmin(ssefit, x0, args=(num_gms, num_collapse, IMo))
+    theta = x[0]
+    beta = x[1]
+    return theta, beta
+
 InputIDAFile = self.ui.InputIDAFile.text()
 SDRCurves = self.ui.SDRCurves.text()
 SDRCurves = SDRCurves.split(',')
@@ -92,16 +108,17 @@ colors = np.array(["green", "yellow", "red", "pink", "black", "orange", "purple"
                    "magenta"])
 if nrecs >= 5:
     for jj in range(nSDR):
-        theta_hat_mom = np.exp(np.mean(np.log(IM_cap[jj, :])))
-        beta_hat_mom = np.std(np.log(IM_cap[jj, :]))
+        # theta_hat_mom = np.exp(np.mean(np.log(IM_cap[jj, :])))
+        # beta_hat_mom = np.std(np.log(IM_cap[jj, :]))
+        theta_hat_sse, beta_hat_sse = fn_sse_pc(IM_cap[jj, :], IM_cap[jj, :].size, np.arange(IM_cap[jj, :].size))
         x_vals = np.arange(0.01, np.ceil(np.max(IM_cap[jj, :])), 0.01)
-        p_collapse = norm.cdf(np.log(x_vals/theta_hat_mom)/beta_hat_mom)
+        p_collapse = norm.cdf(np.log(x_vals/theta_hat_sse)/beta_hat_sse)
+        # p_collapse = norm.cdf(np.log(x_vals/theta_hat_mom)/beta_hat_mom)
         ax4.scatter(IM_cap[jj, :], np.arange(IM_cap[jj, :].size)/IM_cap[jj, :].size, marker=markers[jj],
                     s=8, c=colors[jj])
-
         ax4.plot(x_vals, p_collapse, c=colors[jj],
-                 label=r'$j = %1.1f \/\/\theta = %1.2f \/\/\beta = %1.2f$' % (SDRCurves[jj] * 100, theta_hat_mom,
-                                                                              beta_hat_mom))
+                 label=r'$j = %1.1f \/\/\theta = %1.2f \/\/\beta = %1.2f$' % (SDRCurves[jj] * 100, theta_hat_sse,
+                                                                              beta_hat_sse))
         # Sa_p_05 = np.interp(0.5, p_collapse, x_vals)
         # ax4.annotate('j =' + str(SDRCurves[jj]*100) + '[%]', xy=(Sa_p_05, 0.5), xycoords='data',
         #             xytext=(20, 0), textcoords='offset points',
